@@ -1,0 +1,2416 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PD入力誤差測定</title>
+<meta name="description" content="SAOFD ジャスト回避研究用：5 種類の 3D 攻撃に対する人間の回避入力タイミング誤差を測定し、攻撃ごとの正規分布を推定するブラウザアプリ">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+<style>
+/* 単一のダークテーマ（計測用の固定配色） */
+:root {
+  color-scheme: dark;
+  --bg: #05080f; --bg2: #0a1120; --panel: #0d1628; --line: #1c2b45; --line2: #27406a;
+  --text: #d6e2f2; --muted: #8094ad; --accent: #41e0ff; --accent2: #ff5c8a; --ok: #6dffa8; --warn: #ffc857; --bad: #ff5a6e;
+  --cA: #5aa9ff; --cB: #ffb547; --cC: #e8eef8;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; }
+body { background: radial-gradient(1200px 600px at 70% -10%, #0e2140 0%, var(--bg) 60%) fixed; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--muted); } .small { font-size: 12px; } .bad { color: var(--bad); }
+h2 { font-size: 17px; margin: 0 0 10px; letter-spacing: .02em; color: #eaf6ff; }
+h3 { font-size: 14px; margin: 18px 0 8px; color: #bfe9ff; }
+.top { display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: rgba(5, 9, 18, .85); backdrop-filter: blur(6px); position: sticky; top: 0; z-index: 20; flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.brand .logo { color: var(--accent); text-shadow: 0 0 10px var(--accent); }
+.brand small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab { background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; }
+.tab:hover { color: var(--text); border-color: var(--line); }
+.tab.active { color: #001018; background: var(--accent); box-shadow: 0 0 14px rgba(65, 224, 255, .35); }
+main { padding: 12px 16px 40px; }
+.tabpanel { display: none; } .tabpanel.active { display: block; }
+.card { background: linear-gradient(180deg, rgba(16, 27, 48, .92), rgba(10, 17, 32, .92)); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; box-shadow: inset 0 1px 0 rgba(120, 200, 255, .05); }
+.panel { background: rgba(13, 22, 40, .8); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.btn { background: #12213a; color: var(--text); border: 1px solid var(--line2); border-radius: 6px; padding: 7px 14px; cursor: pointer; font: inherit; display: inline-block; }
+.btn:hover:not(:disabled) { border-color: var(--accent); box-shadow: 0 0 10px rgba(65, 224, 255, .2); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: linear-gradient(180deg, #2ad0f5, #1197c0); color: #001018; border-color: #5ff0ff; font-weight: 700; }
+.btn.danger { border-color: #6b2737; color: #ffb3bf; }
+.btn.sm { padding: 3px 8px; font-size: 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+
+/* 測定画面 */
+.measure { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; height: calc(100vh - 92px); min-height: 480px; }
+.stage { position: relative; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; background: #03060c; min-height: 360px; }
+.stage-gl { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
+.stage-gl canvas.gl { width: 100%; height: 100%; display: block; }
+.null-scene { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 13px var(--mono); color: var(--muted); }
+.hud-top { position: absolute; left: 10px; right: 10px; top: 8px; display: flex; gap: 12px; align-items: center; pointer-events: none; font-size: 13px; text-shadow: 0 1px 3px #000; flex-wrap: wrap; }
+.cond-badge { padding: 2px 10px; border-radius: 4px; font-weight: 700; color: #001018; }
+.cond-badge.cA { background: var(--cA); } .cond-badge.cB { background: var(--cB); } .cond-badge.cC { background: var(--cC); }
+.prog { flex: 1; min-width: 80px; max-width: 280px; height: 6px; background: rgba(255, 255, 255, .12); border-radius: 3px; overflow: hidden; }
+.prog i { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.hud-result { position: absolute; left: 10px; bottom: 10px; right: 120px; pointer-events: none; font-size: 14px; text-shadow: 0 1px 3px #000; }
+.hud-flash { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%) scale(.8); font: 900 52px/1 system-ui, sans-serif; letter-spacing: .12em; opacity: 0; pointer-events: none; transition: opacity .12s, transform .12s; }
+.hud-flash.show { opacity: .95; transform: translate(-50%, -50%) scale(1); }
+.hud-flash.just { color: #8ff8ff; text-shadow: 0 0 22px #3fe6ff; } .hud-flash.ok { color: var(--ok); text-shadow: 0 0 18px #3bd27a; }
+.hud-flash.bad { color: var(--bad); text-shadow: 0 0 18px #ff2040; } .hud-flash.muted { color: #aab; }
+.overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(3, 6, 12, .72); backdrop-filter: blur(2px); }
+.overlay[hidden] { display: none; }
+.ov-title { font-size: 24px; font-weight: 800; color: #eaf6ff; letter-spacing: .04em; }
+.ov-cond { color: var(--accent); font-weight: 700; }
+.ov-text { max-width: 640px; line-height: 1.8; }
+.ov-small { max-width: 640px; color: var(--muted); font-size: 13px; }
+.touch-dodge { position: absolute; right: 12px; bottom: 12px; width: 92px; height: 92px; border-radius: 50%; border: 2px solid rgba(65, 224, 255, .6); background: rgba(65, 224, 255, .12); color: #bff6ff; font-weight: 800; letter-spacing: .1em; touch-action: none; user-select: none; -webkit-user-select: none; display: none; }
+@media (pointer: coarse) { .touch-dodge { display: block; } }
+.side { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.btns .btn.primary { grid-column: 1 / -1; }
+#btn-new-wave { background: linear-gradient(180deg, #ff8a5c, #c94f2c); border-color: #ffb08a; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 12.5px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+body.maximized .side, body.maximized .top { display: none; }
+body.maximized main { padding: 0; }
+body.maximized .measure { grid-template-columns: 1fr; height: 100vh; }
+body.maximized .stage { border-radius: 0; }
+body.maximized .btns-float { display: flex; }
+.stage:fullscreen { border-radius: 0; }
+
+/* タグ */
+.tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; background: #1a2a44; color: var(--text); }
+.tag.just { background: #0f5e70; color: #bff8ff; } .tag.ok { background: #145a36; color: #c7ffe0; }
+.tag.bad { background: #6a1e2c; color: #ffd0d6; } .tag.warn { background: #6a5214; color: #ffefc2; } .tag.muted { background: #2a3140; color: #aab; }
+
+/* 設定 */
+.settings h3 { border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.field { display: grid; grid-template-columns: 280px 1fr; gap: 4px 14px; align-items: center; padding: 6px 0; }
+.field .help { grid-column: 2; color: var(--muted); font-size: 12px; }
+.field input[type=number] { width: 96px; }
+input, select { background: #08101e; color: var(--text); border: 1px solid var(--line2); border-radius: 5px; padding: 5px 7px; font: inherit; }
+input:focus, select:focus { outline: 1px solid var(--accent); }
+.keycap { width: 140px; font-family: var(--mono); cursor: pointer; }
+.presets { margin-left: 8px; } .chip { background: #10203a; color: var(--accent); border: 1px solid var(--line2); border-radius: 12px; padding: 1px 9px; margin-right: 4px; cursor: pointer; font: inherit; font-size: 12px; }
+.cnt { margin-right: 14px; white-space: nowrap; } .cnt input { width: 64px !important; }
+.sw input { width: 18px; height: 18px; vertical-align: middle; }
+.note { padding: 8px 12px; border-radius: 6px; margin: 8px 0; border: 1px solid var(--line2); }
+.note.ok { border-color: #1e6b43; color: var(--ok); } .note.bad { border-color: #6b2737; color: #ffb3bf; } .note.warn { border-color: #6a5214; color: #ffe39a; }
+
+/* 統計 */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.controls input[type=number] { width: 80px; }
+.progress { position: relative; flex-basis: 100%; height: 22px; background: #08101e; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.progress i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #127aa0, #2ad0f5); }
+.progress span { position: relative; padding-left: 8px; font-size: 12px; }
+.progress[hidden] { display: none; }
+.tbl { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+.tbl th, .tbl td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+.tbl th { color: #9fd8f0; font-weight: 600; background: rgba(65, 224, 255, .04); }
+.tbl.small { font-size: 12px; } .tbl td.acts { white-space: nowrap; }
+.tbl .ci { color: var(--muted); font-size: 11px; }
+.scroll { max-height: 420px; overflow: auto; }
+canvas { width: 100%; height: 260px; display: block; background: rgba(4, 8, 16, .6); border: 1px solid var(--line); border-radius: 6px; }
+canvas.tall { height: 320px; }
+.charts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ctl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.ctl-row input[type=number] { width: 80px; }
+.warns { margin: 8px 0; padding-left: 20px; color: #ffe39a; }
+.limits li { margin: 4px 0; }
+.prose { max-width: 920px; line-height: 1.8; }
+.fatal { margin: 10px 16px; padding: 12px 16px; border: 1px solid #6b2737; background: #2a0d14; color: #ffc4cc; border-radius: 8px; }
+.fatal[hidden] { display: none; }
+.toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+.toast { background: #10213a; border: 1px solid var(--line2); padding: 8px 14px; border-radius: 8px; max-width: 420px; box-shadow: 0 6px 20px rgba(0, 0, 0, .4); }
+.toast.bad { border-color: #8a2f40; color: #ffd0d6; }
+
+@media (max-width: 900px) {
+  .measure { grid-template-columns: 1fr; height: auto; }
+  .stage { height: 62vh; }
+  .charts2 { grid-template-columns: 1fr; }
+  .field { grid-template-columns: 1fr; } .field .help { grid-column: 1; }
+  main { padding: 8px; }
+  .hud-flash { font-size: 38px; }
+}
+
+.modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+.modal-box { background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; padding: 18px 20px; max-width: 460px; width: 100%; }
+.btn:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.modal[hidden] { display: none; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.chip.on { background: var(--accent); color: #001018; }
+.scroll-x { overflow-x: auto; }
+.sess { display: block; padding: 3px 0; font-size: 13px; }
+#st-sessions { max-height: 180px; overflow: auto; flex-basis: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.ov-list { text-align: left; max-width: 680px; font-size: 13px; line-height: 1.7; margin: 0; }
+.charts2 canvas { height: 270px; }
+.mselect { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.mselect select { width: 100%; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">◈</span> PD入力誤差測定</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="measure">測定</button>
+    <button class="tab" data-tab="settings">設定</button>
+    <button class="tab" data-tab="stats">統計</button>
+    <button class="tab" data-tab="data">データ</button>
+  </nav>
+</header>
+<div id="fatal" class="fatal" hidden></div>
+<main>
+  <section id="tab-measure" class="tabpanel active">
+    <div class="measure">
+      <div class="stage" id="stage">
+        <div id="stage-gl" class="stage-gl" aria-label="3D 戦闘フィールド（クリック／タップで回避）"></div>
+        <div id="hud-top" class="hud-top"></div>
+        <div id="hud-flash" class="hud-flash"></div>
+        <div id="hud-result" class="hud-result"></div>
+        <div id="overlay" class="overlay" hidden></div>
+        <button id="touch-dodge" class="touch-dodge" aria-label="回避">回避</button>
+      </div>
+      <aside class="side">
+        <div class="panel mselect">
+          <label for="m-mode">測定モード</label>
+          <select id="m-mode"><option value="individual">個別測定（1 種類を繰り返す）</option><option value="mixed">混合測定（5 種類をランダム順）</option></select>
+          <label for="m-attack" id="m-attack-row-label">攻撃</label>
+          <div id="m-attack-row"><select id="m-attack"></select></div>
+        </div>
+        <div class="btns">
+          <button id="btn-start" class="btn primary">測定を開始</button>
+          <button id="btn-continue" class="btn" disabled>開始／再開</button>
+          <button id="btn-pause" class="btn" disabled>休憩</button>
+          <button id="btn-end" class="btn danger" disabled>中断して終了</button>
+          <button id="btn-max" class="btn">3D 最大化</button>
+          <button id="btn-fs" class="btn">フルスクリーン</button>
+        </div>
+        <div id="side-session" class="panel"></div>
+        <div class="panel small muted">
+          <p>入力は<b>最初の 1 回だけ</b>採用されます。早すぎる入力・無入力もすべて記録します。</p>
+          <p>測定時刻は入力イベントの時刻（<code>event.timeStamp</code>）で、回避アニメーションは測定に影響しません。</p>
+          <p>タブ切替やフォーカス喪失で、進行中の試行は中断（無効）になります。</p>
+          <p id="scene-status"></p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tabpanel"><div class="card"><h2>設定</h2><div id="settings-form" class="settings"></div></div></section>
+
+  <section id="tab-stats" class="tabpanel">
+    <div class="card controls">
+      <div id="st-sessions"></div>
+      <p class="muted" style="flex-basis:100%;margin:0">複数選ぶと結合して解析します（明示的な結合）。測定モードやタイミング設定が異なるデータは、結合しても別の群として扱います。</p>
+      <label>ブートストラップ <input type="number" id="st-boot" min="0" max="5000" step="100"></label>
+      <label>J（ms） <input type="number" id="st-J" step="0.5"></label>
+      <span id="st-Jpresets"><button class="chip" data-j="110">110</button><button class="chip" data-j="176">176</button><button class="chip" data-j="181.5">181.5</button><button class="chip" data-j="187">187</button></span>
+      <button id="st-run" class="btn primary">解析を実行</button>
+      <button id="st-params" class="btn">パラメータ JSON</button>
+      <button id="st-json" class="btn">解析結果 JSON</button>
+      <div id="st-progress" class="progress" hidden><i style="width:100%;opacity:.35"></i><span></span></div>
+    </div>
+    <div id="stats-body"></div>
+  </section>
+
+  <section id="tab-data" class="tabpanel">
+    <div class="card">
+      <h2>データ管理</h2>
+      <p class="muted">データはこのブラウザ（localStorage）に保存されます。端末やブラウザを変えると見えません。こまめに JSON で書き出してください。</p>
+      <p id="storage-status" class="bad"></p>
+      <div class="row"><label class="btn">JSON を取り込む<input type="file" id="import-file" accept="application/json,.json" hidden></label></div>
+      <div id="data-table"></div>
+      <h3>攻撃ごとの測定履歴</h3><div id="data-history"></div>
+      <div id="data-view"></div>
+    </div>
+  </section>
+
+</main>
+<div id="confirm" class="modal" hidden><div class="modal-box" role="dialog" aria-modal="true"><p id="confirm-msg"></p><div class="row"><button id="confirm-ok" class="btn primary">OK</button><button id="confirm-cancel" class="btn">キャンセル</button></div></div></div>
+<div id="toasts" class="toasts"></div>
+<script type="module">
+/* ============================================================================
+ * Core — 計測・統計の純粋関数群（DOM・Three.js に依存しない）
+ * 時刻の単位はすべて ms。入力誤差 E = T − H（T：回避入力、H：攻撃接触）。
+ * モデル：攻撃ごとに独立に E ~ N(μ, σ²)。攻撃間でパラメータを共有・プールしない。
+ * このブロックは Node からも読み込んで自動テストする（tests/run-core-tests.mjs）。
+ * ========================================================================== */
+const Core = (() => {
+'use strict';
+
+const VERSION = '2.0.0';
+const LN_SQRT2PI = 0.5 * Math.log(2 * Math.PI);
+const SQRT2PI = Math.sqrt(2 * Math.PI);
+
+/* ---------------------------------------------------------------- 乱数 --- */
+function hashSeed(str) {
+  str = String(str);
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** 再現可能な乱数（sfc32、シードは文字列または整数） */
+function makeRng(seed) {
+  let s = typeof seed === 'number' ? seed >>> 0 : hashSeed(seed);
+  let a = s ^ 0x9e3779b9, b = hashSeed('b' + s), c = hashSeed('c' + s), d = s | 1;
+  const next = () => {
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 16; i++) next();
+  let spare = null;
+  return {
+    random: next,
+    uniform: (lo, hi) => lo + (hi - lo) * next(),
+    int: (n) => Math.floor(next() * n),
+    openUnit() { let u; do { u = next(); } while (u <= 0); return u; },
+    normal() {
+      if (spare !== null) { const v = spare; spare = null; return v; }
+      let u, v, q;
+      do { u = 2 * next() - 1; v = 2 * next() - 1; q = u * u + v * v; } while (q >= 1 || q === 0);
+      const m = Math.sqrt(-2 * Math.log(q) / q);
+      spare = v * m;
+      return u * m;
+    },
+  };
+}
+
+function shuffleInPlace(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+
+/* ---------------------------------------------------------- 正規分布 --- */
+/** 標準正規の下側確率 Φ(x)。Hart(1968)/West(2005) の倍精度近似（相対誤差 ~1e-15）。 */
+function normCdf(x) {
+  if (Number.isNaN(x)) return NaN;
+  const z = Math.abs(x);
+  let c;
+  if (z > 37) c = 0;
+  else {
+    const e = Math.exp(-z * z / 2);
+    if (z >= 3) {
+      // 裾は Mills 比の連分数（後ろから評価）で相対精度を確保
+      let f = z;
+      for (let k = 120; k >= 1; k--) f = z + k / f;
+      c = e / f / 2.5066282746310002;
+    } else if (z < 7.07106781186547) {
+      let b = 3.52624965998911e-02 * z + 0.700383064443688;
+      b = b * z + 6.37396220353165; b = b * z + 33.912866078383; b = b * z + 112.079291497871;
+      b = b * z + 221.213596169931; b = b * z + 220.206867912376;
+      c = e * b;
+      b = 8.83883476483184e-02 * z + 1.75566716318264;
+      b = b * z + 16.064177579207; b = b * z + 86.7807322029461; b = b * z + 296.564248779674;
+      b = b * z + 637.333633378831; b = b * z + 793.826512519948; b = b * z + 440.413735824752;
+      c = c / b;
+    } else {
+      let b = z + 0.65; b = z + 4 / b; b = z + 3 / b; b = z + 2 / b; b = z + 1 / b;
+      c = e / b / 2.506628274631;
+    }
+  }
+  return x > 0 ? 1 - c : c;
+}
+const normSf = (x) => normCdf(-x);
+const normPdf = (x) => Math.exp(-0.5 * x * x) / SQRT2PI;
+const logNormPdf = (x) => -0.5 * x * x - LN_SQRT2PI;
+/** log Φ(x)（下側裾でも安定） */
+function logNormCdf(x) {
+  if (x > -30) return Math.log(normCdf(x));
+  const x2 = x * x;
+  return -0.5 * x2 - Math.log(-x) - LN_SQRT2PI + Math.log1p(-1 / x2 + 3 / (x2 * x2) - 15 / (x2 * x2 * x2));
+}
+const logNormSf = (x) => logNormCdf(-x);
+
+/** 標準正規の分位点（Acklam 近似 + Halley 補正1回） */
+function normQuantile(p) {
+  if (!(p > 0 && p < 1)) return p === 0 ? -Infinity : p === 1 ? Infinity : NaN;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const pl = 0.02425;
+  let x;
+  if (p < pl) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  } else if (p <= 1 - pl) {
+    const q = p - 0.5, r = q * q;
+    x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  } else {
+    const q = Math.sqrt(-2 * Math.log(1 - p));
+    x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  const e = normCdf(x) - p;
+  const u = e * SQRT2PI * Math.exp(x * x / 2);
+  return x - u / (1 + x * u / 2);
+}
+
+function logAddExp(a, b) {
+  if (a === -Infinity) return b;
+  if (b === -Infinity) return a;
+  return a > b ? a + Math.log1p(Math.exp(b - a)) : b + Math.log1p(Math.exp(a - b));
+}
+
+
+/* ---------------------------------- 入力誤差の正規分布（切断・打ち切り対応） --- */
+/**
+ * 予測型の誤差 E_P = T_P − H ~ N(mu, sigma²)。
+ * a は入力受付開始（予兆表示）を誤差空間で表した下限（a = W − H）。a = −∞ なら切断なし。
+ */
+function makePred(mu, sigma, a = -Infinity) {
+  const za = Number.isFinite(a) ? (a - mu) / sigma : -Infinity;
+  const logZ = Number.isFinite(a) ? logNormSf(za) : 0; // log P(E ≥ a) 親分布
+  return { mu, sigma, a, za, logZ, Z: Math.exp(logZ) };
+}
+function predLogPdf(e, P) {
+  if (e < P.a) return -Infinity;
+  const z = (e - P.mu) / P.sigma;
+  return logNormPdf(z) - Math.log(P.sigma) - P.logZ;
+}
+function predLogSf(e, P) {
+  if (e <= P.a) return 0;
+  return logNormSf((e - P.mu) / P.sigma) - P.logZ;
+}
+function predCdf(e, P) { return -Math.expm1(predLogSf(e, P)); }
+/** 切断正規からの乱数（逆関数法） */
+function predSample(P, rng) {
+  const lo = Number.isFinite(P.a) ? normCdf(P.za) : 0;
+  const u = lo + (1 - lo) * rng.openUnit();
+  if (u >= 1) return P.mu + P.sigma * 8;
+  return P.mu + P.sigma * normQuantile(u);
+}
+
+
+/** 判定（境界の扱い：−J ≤ e ≤ 0 をジャスト、−D ≤ e < −J を通常回避） */
+function classify(e, J, D) {
+  if (e === null || e === undefined || Number.isNaN(e)) return 'no_input';
+  if (e > 0) return 'late_hit';
+  if (e >= -J) return 'just';
+  if (e >= -D) return 'normal';
+  return 'early_hit';
+}
+
+/** 任意の CDF 関数から結果確率（obsAfter: 接触後の観測時間） */
+function outcomeProbs(cdf, J, D, obsAfter) {
+  const Fd = cdf(-D), Fj = cdf(-J), F0 = cdf(0), Fc = cdf(obsAfter);
+  return {
+    early_hit: Fd,
+    normal: Math.max(0, Fj - Fd),
+    just: Math.max(0, F0 - Fj),
+    late_hit: Math.max(0, Fc - F0),
+    no_input: Math.max(0, 1 - Fc),
+  };
+}
+
+/** 台形則による数値積分（step ms） */
+function integrate(fn, lo, hi, step = 1) {
+  const n = Math.max(2, Math.ceil((hi - lo) / step));
+  const h = (hi - lo) / n;
+  let s = 0.5 * (fn(lo) + fn(hi));
+  for (let i = 1; i < n; i++) s += fn(lo + i * h);
+  return s * h;
+}
+
+/* -------------------------------------------------- 最適化・線形代数 --- */
+/** Nelder–Mead 最小化 */
+function nelderMead(f, x0, opt = {}) {
+  const n = x0.length;
+  const maxIter = opt.maxIter || 400 * n;
+  const tolF = opt.tolF ?? 1e-9, tolX = opt.tolX ?? 1e-7;
+  const steps = opt.steps || x0.map((v) => (Math.abs(v) > 1e-8 ? 0.1 * Math.abs(v) : 0.1));
+  let simplex = [x0.slice()];
+  for (let i = 0; i < n; i++) { const x = x0.slice(); x[i] += steps[i]; simplex.push(x); }
+  const F = (x) => { const v = f(x); return Number.isFinite(v) ? v : 1e300; };
+  let fv = simplex.map(F);
+  let iter = 0, converged = false;
+  while (iter++ < maxIter) {
+    const idx = fv.map((v, i) => i).sort((i, j) => fv[i] - fv[j]);
+    simplex = idx.map((i) => simplex[i]); fv = idx.map((i) => fv[i]);
+    const spreadF = Math.abs(fv[n] - fv[0]);
+    let spreadX = 0;
+    for (let i = 1; i <= n; i++) for (let k = 0; k < n; k++) spreadX = Math.max(spreadX, Math.abs(simplex[i][k] - simplex[0][k]));
+    if (spreadF <= tolF * (Math.abs(fv[0]) + 1e-12) + 1e-12 && spreadX <= tolX * (1 + Math.max(...simplex[0].map(Math.abs)))) { converged = true; break; }
+    const cen = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) for (let k = 0; k < n; k++) cen[k] += simplex[i][k] / n;
+    const pt = (t) => cen.map((c, k) => c + t * (simplex[n][k] - c));
+    const xr = pt(-1), fr = F(xr);
+    if (fr < fv[0]) {
+      const xe = pt(-2), fe = F(xe);
+      if (fe < fr) { simplex[n] = xe; fv[n] = fe; } else { simplex[n] = xr; fv[n] = fr; }
+    } else if (fr < fv[n - 1]) { simplex[n] = xr; fv[n] = fr; }
+    else {
+      const outside = fr < fv[n];
+      const xc = outside ? pt(-0.5) : pt(0.5), fc = F(xc);
+      if (fc < (outside ? fr : fv[n])) { simplex[n] = xc; fv[n] = fc; }
+      else {
+        for (let i = 1; i <= n; i++) { simplex[i] = simplex[i].map((v, k) => simplex[0][k] + 0.5 * (v - simplex[0][k])); fv[i] = F(simplex[i]); }
+      }
+    }
+  }
+  let best = 0; for (let i = 1; i <= n; i++) if (fv[i] < fv[best]) best = i;
+  return { x: simplex[best], fx: fv[best], iter, converged };
+}
+/** 再始動付き */
+function minimize(f, x0, opt = {}) {
+  let r = nelderMead(f, x0, opt);
+  for (let k = 0; k < 2; k++) {
+    const r2 = nelderMead(f, r.x, opt);
+    const improved = r.fx - r2.fx > 1e-7 * (Math.abs(r.fx) + 1);
+    r = r2.fx <= r.fx ? r2 : r;
+    if (!improved) break;
+  }
+  return r;
+}
+function hessian(f, x, h) {
+  const n = x.length, H = [...Array(n)].map(() => new Array(n).fill(0));
+  const f0 = f(x);
+  const hs = h || x.map((v) => 1e-4 * (Math.abs(v) + 1));
+  for (let i = 0; i < n; i++) {
+    for (let j = i; j < n; j++) {
+      let v;
+      if (i === j) {
+        const xp = x.slice(); xp[i] += hs[i]; const xm = x.slice(); xm[i] -= hs[i];
+        v = (f(xp) - 2 * f0 + f(xm)) / (hs[i] * hs[i]);
+      } else {
+        const pp = x.slice(); pp[i] += hs[i]; pp[j] += hs[j];
+        const pm = x.slice(); pm[i] += hs[i]; pm[j] -= hs[j];
+        const mp = x.slice(); mp[i] -= hs[i]; mp[j] += hs[j];
+        const mm = x.slice(); mm[i] -= hs[i]; mm[j] -= hs[j];
+        v = (f(pp) - f(pm) - f(mp) + f(mm)) / (4 * hs[i] * hs[j]);
+      }
+      H[i][j] = H[j][i] = v;
+    }
+  }
+  return H;
+}
+function invertMatrix(M) {
+  const n = M.length, A = M.map((r, i) => [...r, ...[...Array(n)].map((_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    if (Math.abs(A[p][c]) < 1e-300) return null;
+    [A[c], A[p]] = [A[p], A[c]];
+    const d = A[c][c]; for (let k = 0; k < 2 * n; k++) A[c][k] /= d;
+    for (let r = 0; r < n; r++) if (r !== c) { const m = A[r][c]; if (m) for (let k = 0; k < 2 * n; k++) A[r][k] -= m * A[c][k]; }
+  }
+  return A.map((r) => r.slice(n));
+}
+/** 対称行列の固有値（Jacobi 法） */
+function symEigenvalues(M) {
+  const n = M.length, A = M.map((r) => r.slice());
+  for (let sweep = 0; sweep < 100; sweep++) {
+    let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i][j] * A[i][j];
+    if (off < 1e-22) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      if (Math.abs(A[p][q]) < 1e-300) continue;
+      const th = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+      const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; }
+      for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; }
+    }
+  }
+  return A.map((r, i) => r[i]).sort((x, y) => x - y);
+}
+
+/* ------------------------------------------------------- 記述統計 --- */
+function mean(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN; }
+function sd(a) { if (a.length < 2) return NaN; const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); }
+function quantileSorted(s, p) {
+  if (!s.length) return NaN;
+  const h = (s.length - 1) * p, lo = Math.floor(h), hi = Math.ceil(h);
+  const vl = s[lo], vh = s[hi];
+  if (vl === Infinity || vh === Infinity) return h - lo > 0 || vl === Infinity ? Infinity : vl;
+  return vl + (h - lo) * (vh - vl);
+}
+function quantile(a, p) { return quantileSorted(a.slice().sort((x, y) => x - y), p); }
+function describe(a) {
+  const s = a.slice().sort((x, y) => x - y);
+  return { n: s.length, mean: mean(s), sd: sd(s), min: s[0], max: s[s.length - 1],
+    p05: quantileSorted(s, 0.05), p25: quantileSorted(s, 0.25), p50: quantileSorted(s, 0.5), p75: quantileSorted(s, 0.75), p95: quantileSorted(s, 0.95) };
+}
+function frameStats(intervals) {
+  if (!intervals.length) return { mean: null, sd: null, p95: null, max: null, median: null, fps: null };
+  const d = describe(intervals);
+  return { mean: d.mean, sd: Number.isFinite(d.sd) ? d.sd : 0, p95: d.p95, max: d.max, median: d.p50, fps: 1000 / d.p50 };
+}
+function rankArray(a) {
+  const idx = a.map((v, i) => i).sort((i, j) => a[i] - a[j]);
+  const r = new Array(a.length);
+  for (let k = 0; k < idx.length;) {
+    let m = k; while (m + 1 < idx.length && a[idx[m + 1]] === a[idx[k]]) m++;
+    const rr = (k + m) / 2 + 1; for (let t = k; t <= m; t++) r[idx[t]] = rr; k = m + 1;
+  }
+  return r;
+}
+function pearson(x, y) {
+  const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < x.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+  return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : NaN;
+}
+/** 時系列の検査：Spearman 順位相関（試行番号との単調傾向）と lag-1 自己相関 */
+function trendCheck(values) {
+  const n = values.length;
+  if (n < 10) return { n, spearman: NaN, spearmanP: NaN, lag1: NaN, lag1Bound: NaN, flagged: false };
+  const rho = pearson(rankArray(values.map((v, i) => i)), rankArray(values));
+  const t = rho * Math.sqrt((n - 2) / Math.max(1e-12, 1 - rho * rho));
+  const p = 2 * normSf(Math.abs(t)); // n が大きければ t≈正規
+  const m = mean(values); let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { den += (values[i] - m) ** 2; if (i) num += (values[i] - m) * (values[i - 1] - m); }
+  const lag1 = den > 0 ? num / den : NaN;
+  const bound = 1.96 / Math.sqrt(n);
+  return { n, spearman: rho, spearmanP: p, lag1, lag1Bound: bound, flagged: p < 0.05 || Math.abs(lag1) > bound };
+}
+function movingAverage(a, w) {
+  const out = []; let s = 0;
+  for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= w) s -= a[i - w]; out.push(i >= w - 1 ? s / w : null); }
+  return out;
+}
+
+
+/* ---------------------------------------------- 適合度（PIT 統計量） --- */
+function ksUniform(u) {
+  const s = u.slice().sort((x, y) => x - y), n = s.length; let D = 0;
+  for (let i = 0; i < n; i++) D = Math.max(D, (i + 1) / n - s[i], s[i] - i / n);
+  return D;
+}
+function adUniform(u) {
+  const s = u.map((v) => Math.min(1 - 1e-12, Math.max(1e-12, v))).sort((x, y) => x - y), n = s.length;
+  let A = 0; for (let i = 0; i < n; i++) A += (2 * i + 1) * (Math.log(s[i]) + Math.log(1 - s[n - 1 - i]));
+  return -n - A / n;
+}
+
+
+/* ------------------------------------- 正規分布の最尤推定（切断・右打ち切り） --- */
+/**
+ * rows: [{ e: 誤差 or null(打ち切り), a: 下限(予兆時刻−H), c: 観測終了(obsEnd−H) }]
+ * 切断正規（下限 a）＋右打ち切り（c）の最尤推定。a=−∞ なら通常の正規。
+ */
+function predNegLL(mu, sigma, rows) {
+  if (!(sigma > 0)) return Infinity;
+  let ll = 0;
+  let cache = null;
+  for (const r of rows) {
+    if (!cache || cache.a !== r.a) cache = makePred(mu, sigma, r.a);
+    ll += r.e === null ? predLogSf(r.c, cache) : predLogPdf(r.e, cache);
+  }
+  return -ll;
+}
+function fitPredictive(rows) {
+  const warnings = [];
+  const obs = rows.filter((r) => r.e !== null).map((r) => r.e);
+  const n = rows.length, nObs = obs.length, nCens = n - nObs;
+  if (nObs < 3) return { ok: false, n, nObs, nCens, warnings: ['入力が観測された試行が3未満のため推定できません。'] };
+  const m0 = mean(obs), s0 = Math.max(5, sd(obs) || 20);
+  const f = (x) => predNegLL(x[0], Math.exp(x[1]), rows);
+  const opt = minimize(f, [m0, Math.log(s0)], { steps: [s0 * 0.5, 0.3] });
+  const mu = opt.x[0], sigma = Math.exp(opt.x[1]);
+  const H = hessian(f, opt.x, [Math.max(0.05, sigma * 1e-3), 1e-3]);
+  const cov = invertMatrix(H);
+  let seMu = NaN, seSigma = NaN, hessOk = false;
+  if (cov && cov[0][0] > 0 && cov[1][1] > 0) { hessOk = true; seMu = Math.sqrt(cov[0][0]); seSigma = sigma * Math.sqrt(cov[1][1]); }
+  // 切断の影響
+  const aVals = rows.map((r) => r.a).filter(Number.isFinite);
+  const truncProb = aVals.length ? Math.max(...aVals.map((a) => normCdf((a - mu) / sigma))) : 0;
+  // 通常正規（切断・打ち切りを無視）との比較
+  const naive = { mu: m0, sigma: nObs > 1 ? Math.sqrt(obs.reduce((s, v) => s + (v - m0) ** 2, 0) / nObs) : NaN };
+  // PIT（観測期間内に条件付けた確率積分変換）
+  const pit = [];
+  for (const r of rows) if (r.e !== null) {
+    const P = makePred(mu, sigma, r.a), Fc = predCdf(r.c, P);
+    pit.push(Fc > 0 ? predCdf(r.e, P) / Fc : NaN);
+  }
+  if (n < 30) warnings.push(`有効試行数 ${n} は少なく、推定値の不確実性が大きい可能性があります（目安30以上）。`);
+  if (nCens / n > 0.2) warnings.push(`無入力（打ち切り）が ${(100 * nCens / n).toFixed(0)}% あります。`);
+  if (!opt.converged) warnings.push('最適化が収束判定に達しませんでした。');
+  if (!hessOk) warnings.push('ヘッセ行列が正定値でなく、標準誤差を計算できません（識別性に問題がある可能性）。');
+  return {
+    ok: true, model: 'normal' + (truncProb > 1e-3 ? '_truncated' : ''), mu, sigma, seMu, seSigma,
+    logLik: -opt.fx, n, nObs, nCens, converged: opt.converged,
+    truncation: { lowerErrorMs: aVals.length ? Math.max(...aVals) : null, maxProb: truncProb, negligible: truncProb < 1e-3 },
+    naive, gof: pit.length >= 5 ? { ks: ksUniform(pit), ad: adUniform(pit), nPit: pit.length } : null,
+    pit, warnings,
+  };
+}
+function simulatePredRows(rows, mu, sigma, rng) {
+  return rows.map((r) => {
+    const e = predSample(makePred(mu, sigma, r.a), rng);
+    return { a: r.a, c: r.c, e: e > r.c ? null : e };
+  });
+}
+
+
+/* ---------------------------------------------------- 試行スケジュール --- */
+/** [lo,hi] を nb 等分した層を順列ブロックで巡回し、層内一様に値を取る（同一層の連続は最大2） */
+function stratifiedSequence(rng, n, lo, hi, nb = 8) {
+  if (n <= 0) return [];
+  if (hi - lo < 1e-9) return new Array(n).fill(lo);
+  const out = [];
+  let prev = -1;
+  while (out.length < n) {
+    const perm = shuffleInPlace([...Array(nb).keys()], rng);
+    if (perm[0] === prev && nb > 1) { const j = 1 + rng.int(nb - 1); [perm[0], perm[j]] = [perm[j], perm[0]]; }
+    for (const b of perm) { if (out.length >= n) break; out.push(lo + (hi - lo) * (b + rng.random()) / nb); }
+    prev = perm[perm.length - 1];
+  }
+  return out;
+}
+
+
+/* ============================================================ 5 種類の攻撃 ===== */
+const ATTACKS = ['charge', 'slam', 'shockwave', 'aoe', 'roar'];
+const ATTACK_LABEL = { charge: '突進', slam: '叩きつけ', shockwave: '衝撃波', aoe: 'AoE起爆', roar: '赤発光→咆哮' };
+
+/** 攻撃ごとの既定タイミング（ms、距離はシーン単位、速度は単位/秒） */
+const DEFAULT_ATTACK_PARAMS = {
+  charge: { turnMs: 300, windupMs: 900, runMs: 550, startDistance: 11 },
+  slam: { raiseMs: 500, holdMs: 450, swingMs: 280 },
+  shockwave: { windupMs: 700, speed: 10, distance: 7 },
+  aoe: { castMs: 500, delayMs: 1500 },
+  roar: { glowMs: 250 },
+};
+
+/**
+ * 攻撃のタイミング。W（予兆の開始＝予備動作を初めて描画したフレーム）からの相対時刻 ms。
+ * lead = H − W（予兆開始 → 攻撃接触）は試行間で一定（標準の固定タイミング条件）。
+ * 3D 描画と判定は、必ずこの関数が返す同じ時刻を使う。
+ */
+function attackTiming(type, p) {
+  switch (type) {
+    case 'charge': {
+      const turn = Math.min(p.turnMs, p.windupMs);
+      return { type, lead: p.windupMs + p.runMs, events: { turnEnd: turn, runStart: p.windupMs }, params: { ...p } };
+    }
+    case 'slam':
+      return { type, lead: p.raiseMs + p.holdMs + p.swingMs, events: { raiseEnd: p.raiseMs, swingStart: p.raiseMs + p.holdMs }, params: { ...p } };
+    case 'shockwave': {
+      const travel = (p.distance / p.speed) * 1000; // d / v
+      return { type, lead: p.windupMs + travel, events: { emit: p.windupMs, travel }, params: { ...p } };
+    }
+    case 'aoe':
+      return { type, lead: p.castMs + p.delayMs, events: { aoeShow: p.castMs }, params: { ...p } };
+    case 'roar':
+      return { type, lead: p.glowMs, events: { glow: 0 }, params: { ...p } };
+    default: throw new Error('unknown attack ' + type);
+  }
+}
+/** 衝撃波の波面半径 r(t) = v (t − t0)。t0 = 発生時刻（W + windup）。H = t0 + d/v。 */
+function shockRadius(t, t0, speed) { return t < t0 ? null : (speed / 1000) * (t - t0); }
+/** 突進：敵の前面の位置（プレイヤーからの距離）。runStart で startDistance、H で 0。 */
+function chargeDistance(t, runStartAbs, H, startDistance) {
+  if (t <= runStartAbs) return startDistance;
+  if (t >= H) return 0;
+  return startDistance * (1 - (t - runStartAbs) / (H - runStartAbs));
+}
+
+/* --------------------------------------------------------- 試行計画 --- */
+/**
+ * mode 'individual'：1 種類の攻撃を繰り返す。mode 'mixed'：5 種類を均衡ブロックでランダム順に提示。
+ * 混合では各ブロック（blockSize 試行）に各攻撃が同数ずつ入り、同じ攻撃は 2 回までしか連続しない。
+ */
+function buildPlan(cfg, seed) {
+  const rng = makeRng('plan:' + seed);
+  const queue = [];
+  const push = (attack, practice, block, idx, fp) => queue.push({ trial_id: `${attack}-${practice ? 'P' : 'M'}${String(idx).padStart(3, '0')}`, attack, is_practice: practice, block_index: block, index_in_attack: idx, foreperiod_ms: fp });
+  const fpOf = (n) => stratifiedSequence(rng, n, cfg.itiRange[0], cfg.itiRange[1], 6);
+  if (cfg.mode === 'individual') {
+    const a = cfg.attack, n = cfg.practice + cfg.main, fps = fpOf(n), bs = Math.max(1, cfg.blockSize);
+    for (let i = 0; i < n; i++) { const pr = i < cfg.practice; push(a, pr, pr ? 0 : 1 + Math.floor((i - cfg.practice) / bs), pr ? i + 1 : i - cfg.practice + 1, fps[i]); }
+  } else {
+    const seq = (perAttack, blockPer) => { // 均衡ブロック列
+      const out = [];
+      let remaining = Object.fromEntries(ATTACKS.map((a) => [a, perAttack]));
+      while (ATTACKS.some((a) => remaining[a] > 0)) {
+        const block = [];
+        for (const a of ATTACKS) { const k = Math.min(blockPer, remaining[a]); for (let i = 0; i < k; i++) block.push(a); remaining[a] -= k; }
+        for (let tries = 0; tries < 200; tries++) { // 3 連続以上を避ける
+          shuffleInPlace(block, rng);
+          const joined = out.slice(-2).concat(block);
+          let ok = true; for (let i = 2; i < joined.length; i++) if (joined[i] === joined[i - 1] && joined[i] === joined[i - 2]) { ok = false; break; }
+          if (ok) break;
+        }
+        out.push(block);
+      }
+      return out;
+    };
+    const perBlock = Math.max(1, Math.round(cfg.blockSize / ATTACKS.length));
+    const counter = Object.fromEntries(ATTACKS.map((a) => [a, 0]));
+    const pracBlocks = cfg.mixedPractice > 0 ? seq(Math.ceil(cfg.mixedPractice / ATTACKS.length), Math.ceil(cfg.mixedPractice / ATTACKS.length)) : [];
+    const mainBlocks = seq(cfg.mixedPerAttack, perBlock);
+    const allP = pracBlocks.flat().slice(0, cfg.mixedPractice), allM = mainBlocks.flat();
+    const fps = fpOf(allP.length + allM.length);
+    let k = 0;
+    allP.forEach((a) => { counter[a]++; push(a, true, 0, counter[a], fps[k++]); });
+    for (const a of ATTACKS) counter[a] = 0;
+    mainBlocks.forEach((blk, b) => blk.forEach((a) => { counter[a]++; push(a, false, b + 1, counter[a], fps[k++]); }));
+  }
+  return { queue };
+}
+
+/* ------------------------------------------------------------ 試行ランナー --- */
+/**
+ * 1 試行の状態機械。時刻はすべて performance.now() 系の同一時計（ms）。
+ * S：試行開始＝観測開始（入力受付開始）。W：予兆（予備動作）を初めて描画したフレーム。H = W + lead。
+ * obsEnd = H + obsAfter（既定 1000 ms）まで入力を受け付ける。
+ */
+function createTrialRunner(cfg) {
+  const st = cfg.settings, item = cfg.item;
+  const timing = attackTiming(item.attack, st.attacks[item.attack]);
+  const r = { phase: 'init', S: null, Wsched: null, W: null, H: null, obsEnd: null, impactFrame: null, firstInput: null, ignored: 0, frames: [], lastTs: null, aborted: null, done: false, warnFrameInterval: null };
+  function start(ts) { r.phase = 'ready'; r.S = ts; r.lastTs = ts; r.Wsched = ts + item.foreperiod_ms; }
+  function frame(ts) {
+    if (r.done || r.aborted || r.phase === 'init') return;
+    const dt = r.lastTs !== null ? ts - r.lastTs : null;
+    if (dt > 0) r.frames.push(dt);
+    r.lastTs = ts;
+    if (r.phase === 'ready' && ts >= r.Wsched) {
+      r.W = ts; r.warnFrameInterval = dt; r.H = r.W + timing.lead; r.obsEnd = r.H + st.obsAfter; r.phase = 'attack';
+    }
+    if (r.phase === 'attack' && ts >= r.H) { r.impactFrame = ts; r.phase = 'post'; }
+    if (r.phase === 'post' && ts >= r.obsEnd) { r.phase = 'done'; r.done = true; }
+  }
+  function input(info) {
+    if (r.done || r.aborted || r.phase === 'init') return false;
+    if (r.firstInput) { r.ignored++; return false; }
+    r.firstInput = info; return true;
+  }
+  function abort(reason, ts) { if (!r.done && !r.aborted) r.aborted = { reason, ts }; }
+  function view(ts) {
+    return { attack: item.attack, phase: r.phase, ts, S: r.S, W: r.W, H: r.H, timing, inputAt: r.firstInput ? r.firstInput.handlerTs : null, impactAt: r.impactFrame };
+  }
+  function result(extra = {}) {
+    const toRel = cfg.toRel || ((t) => t);
+    const rel = (t) => (t === null || t === undefined ? null : toRel(t));
+    const fi = r.firstInput;
+    const T = fi && r.obsEnd !== null && fi.time <= r.obsEnd ? fi.time : (fi && r.obsEnd === null ? fi.time : null);
+    const aborted = !!r.aborted || !r.done;
+    const e = !aborted && T !== null && r.H !== null ? T - r.H : null;
+    const fs = frameStats(r.frames);
+    const frameDrop = r.frames.some((x) => x > Math.max(50, 3 * (fs.median || 16.7)));
+    const reasons = [];
+    if (aborted) reasons.push(r.aborted ? r.aborted.reason : 'incomplete');
+    if (item.is_practice) reasons.push('practice');
+    if (extra.deviceMismatch) reasons.push('device_mismatch');
+    if (frameDrop && st.excludeFrameDrops) reasons.push('frame_drop');
+    return {
+      trial_id: item.trial_id, attack_type: item.attack, measurement_mode: extra.mode || null,
+      block_index: item.block_index, trial_index: item.index_in_attack, is_practice: item.is_practice,
+      valid_for_fit: reasons.length === 0, invalid_reason: reasons.join('|'), status: aborted ? 'aborted' : 'completed',
+      observation_start_ms: rel(r.S),
+      attack_warning_scheduled_ms: rel(r.Wsched), attack_warning_time_ms: rel(r.W),
+      attack_impact_time_ms: rel(r.H), impact_frame_time_ms: rel(r.impactFrame),
+      input_time_ms: !aborted && T !== null ? rel(T) : null,
+      input_event_timestamp_ms: fi && fi.eventTs !== null ? rel(fi.eventTs) : null,
+      input_handler_timestamp_ms: fi ? rel(fi.handlerTs) : null, input_time_source: fi ? fi.source : null,
+      input_device: fi ? fi.device : null, input_code: fi ? fi.code : null,
+      input_after_observation: !!(fi && T === null),
+      input_error_ms: e,
+      pre_warning_input: e !== null && r.W !== null && T < r.W,
+      outcome: aborted ? 'aborted' : classify(e, st.justWindow, st.invincibleWindow),
+      is_censored: !aborted && T === null,
+      observation_end_ms: rel(r.obsEnd),
+      warning_lead_ms: r.H !== null ? r.H - r.W : null, foreperiod_ms: item.foreperiod_ms,
+      warning_frame_delay_ms: r.W !== null ? r.W - r.Wsched : null, impact_frame_delay_ms: r.impactFrame !== null ? r.impactFrame - r.H : null,
+      just_window_ms: st.justWindow, invincible_window_ms: st.invincibleWindow,
+      attack_parameter_json: JSON.stringify(timing.params),
+      estimated_fps: fs.fps, frame_mean_ms: fs.mean, frame_sd_ms: fs.sd, frame_p95_ms: fs.p95, frame_max_ms: fs.max,
+      frame_drop_warning: frameDrop, ignored_input_count: r.ignored,
+      ...extra.fields,
+    };
+  }
+  return { start, frame, input, abort, view, result, state: r, timing };
+}
+
+/* -------------------------------------------------------- 解析用の行 --- */
+/** 攻撃 1 種類の推定用データ。a = 観測開始 − H（左側の切断）、c = 観測終了 − H（右打ち切り）。 */
+function rowsFor(trials, attack, opts = {}) {
+  return trials.filter((t) => t.attack_type === attack && t.status === 'completed' && (opts.includePractice ? !/aborted|device_mismatch|frame_drop/.test(t.invalid_reason || '') : t.valid_for_fit))
+    .map((t) => ({ e: t.is_censored ? null : t.input_error_ms, a: t.observation_start_ms - t.attack_impact_time_ms, c: t.observation_end_ms - t.attack_impact_time_ms, id: t.trial_id, idx: t.trial_index }));
+}
+
+/* ------------------------------------------------------------ 記述統計 --- */
+function skewness(a) {
+  const n = a.length; if (n < 3) return NaN;
+  const m = mean(a); let m2 = 0, m3 = 0; for (const v of a) { m2 += (v - m) ** 2; m3 += (v - m) ** 3; }
+  m2 /= n; m3 /= n; const g1 = m3 / Math.pow(m2, 1.5);
+  return Math.sqrt(n * (n - 1)) / (n - 2) * g1; // 標本補正（Fisher–Pearson）
+}
+function excessKurtosis(a) {
+  const n = a.length; if (n < 4) return NaN;
+  const m = mean(a); let m2 = 0, m4 = 0; for (const v of a) { m2 += (v - m) ** 2; m4 += (v - m) ** 4; }
+  m2 /= n; m4 /= n; const g2 = m4 / (m2 * m2) - 3;
+  return ((n - 1) / ((n - 2) * (n - 3))) * ((n + 1) * g2 + 6);
+}
+/** 外れ値：Tukey の柵（四分位範囲の 1.5 倍）の外 */
+function outlierInfo(a) {
+  const s = a.slice().sort((x, y) => x - y);
+  const q1 = quantileSorted(s, 0.25), q3 = quantileSorted(s, 0.75), iqr = q3 - q1;
+  const lo = q1 - 1.5 * iqr, hi = q3 + 1.5 * iqr;
+  const k = s.filter((v) => v < lo || v > hi).length;
+  return { lo, hi, count: k, fraction: s.length ? k / s.length : NaN };
+}
+/** 正規 Q-Q：観測値（昇順）と理論分位点（Blom 位置） */
+function qqPoints(a, mu, sigma) {
+  const s = a.slice().sort((x, y) => x - y), n = s.length;
+  return s.map((v, i) => [mu + sigma * normQuantile((i + 1 - 0.375) / (n + 0.25)), v]);
+}
+
+/* ------------------------------------------------------- 正規推定（全体） --- */
+/**
+ * 1 種類の攻撃について：
+ *  - simple：入力が観測された試行だけの標本平均・最尤 SD（n で割る）と不偏 SD
+ *  - mle：観測開始で左側切断、観測終了で右打ち切りを入れた最尤推定
+ *    観測：f(T)/(1−F(A))、無入力：(1−F(C))/(1−F(A))
+ */
+function fitNormalAttack(rows) {
+  const obs = rows.filter((r) => r.e !== null).map((r) => r.e);
+  const n = obs.length;
+  const simple = n ? { mu: mean(obs), sigma: n > 0 ? Math.sqrt(obs.reduce((s, v) => s + (v - mean(obs)) ** 2, 0) / n) : NaN, sdUnbiased: sd(obs), n } : null;
+  const mle = rows.length ? fitPredictive(rows) : { ok: false, warnings: ['データがありません。'] };
+  const d = n ? describe(obs) : null;
+  return {
+    n: rows.length, nObs: n, nCens: rows.length - n, simple, mle,
+    descriptive: d ? { ...d, skewness: skewness(obs), excessKurtosis: excessKurtosis(obs), outliers: outlierInfo(obs) } : null,
+  };
+}
+
+/** 非切断の正規分布での結果確率（late_hit は「接触より後」全体） */
+function normalOutcomeProbs(mu, sigma, J, D) {
+  const F = (x) => normCdf((x - mu) / sigma);
+  return { early_hit: F(-D), normal: Math.max(0, F(-J) - F(-D)), just: Math.max(0, F(0) - F(-J)), late_hit: 1 - F(0) };
+}
+/** P_Just = Φ(−μ/σ) − Φ((−J−μ)/σ) */
+function pJust(mu, sigma, J) { return normCdf(-mu / sigma) - normCdf((-J - mu) / sigma); }
+/** 観測可能な試行の確率（観測開始 a で切断、観測終了 c で打ち切り）。試行ごとの a, c で平均 */
+function conditionalOutcomeProbs(mu, sigma, rows, J, D) {
+  const acc = { early_hit: 0, normal: 0, just: 0, late_hit: 0, no_input: 0 };
+  for (const r of rows) {
+    const P = makePred(mu, sigma, r.a);
+    const pr = outcomeProbs((e) => predCdf(e, P), J, D, r.c);
+    for (const k in acc) acc[k] += pr[k];
+  }
+  for (const k in acc) acc[k] /= rows.length || 1;
+  return acc;
+}
+/** σ 一定で平均だけ動かしたときの P_Just の最大化（対称な受付区間なら μ = −J/2） */
+function optimalMu(sigma, J) { return -J / 2; }
+
+/* ------------------------------------------------------- 正規乱数の検査 --- */
+function normalRngCheck(rng, n) {
+  let s = 0, s2 = 0; const xs = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const z = rng.normal(); xs[i] = z; s += z; s2 += z * z; }
+  const m = s / n, v = s2 / n - m * m;
+  xs.sort();
+  let D = 0; for (let i = 0; i < n; i += 3) { const F = normCdf(xs[i]); D = Math.max(D, Math.abs((i + 1) / n - F), Math.abs(i / n - F)); }
+  return { mean: m, variance: v, ks: D, ksCrit01: 1.63 / Math.sqrt(n) };
+}
+
+/* -------------------------------------------------------------- CSV --- */
+const CSV_COLUMNS = [
+  'session_id', 'trial_id', 'attack_type', 'measurement_mode', 'is_practice', 'valid_for_fit', 'invalid_reason',
+  'attack_warning_time_ms', 'attack_impact_time_ms', 'input_time_ms', 'input_error_ms', 'outcome', 'is_censored',
+  'observation_start_ms', 'observation_end_ms', 'input_device', 'input_event_timestamp_ms', 'input_handler_timestamp_ms',
+  'just_window_ms', 'invincible_window_ms', 'attack_parameter_json', 'estimated_fps', 'frame_p95_ms', 'frame_max_ms',
+  'focus_lost', 'timestamp_utc',
+  // 追加列
+  'status', 'block_index', 'trial_index', 'attack_warning_scheduled_ms', 'impact_frame_time_ms', 'warning_frame_delay_ms', 'impact_frame_delay_ms',
+  'warning_lead_ms', 'foreperiod_ms', 'pre_warning_input', 'input_after_observation', 'input_time_source', 'input_code',
+  'ignored_input_count', 'frame_mean_ms', 'frame_sd_ms', 'frame_drop_warning', 'feedback_enabled', 'random_seed', 'retry_of',
+  'timing_key', 'render_mode', 'clock_note',
+];
+function csvCell(v) {
+  if (v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v))) return '';
+  if (typeof v === 'number') return String(Math.round(v * 1e6) / 1e6);
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCSV(trials) {
+  const lines = [CSV_COLUMNS.join(',')];
+  for (const t of trials) lines.push(CSV_COLUMNS.map((k) => csvCell(t[k])).join(','));
+  return lines.join('\r\n') + '\r\n';
+}
+/** 標準の固定タイミング条件を区別するキー（攻撃種類＋その攻撃のタイミング設定） */
+function timingKey(attack, params) { return attack + ':' + JSON.stringify(params); }
+
+
+/* ------------------------------------------------------- 自動テスト --- */
+function runCoreTests() {
+  const out = [];
+  const T = (name, fn) => {
+    try { const r = fn(); out.push({ name, pass: r === true || !!(r && r.pass), detail: r && r.detail ? r.detail : '' }); }
+    catch (err) { out.push({ name, pass: false, detail: 'exception: ' + (err && err.message) }); }
+  };
+  const close = (a, b, tol) => Math.abs(a - b) <= tol;
+  const rng = makeRng('tests');
+  const settings = { attacks: JSON.parse(JSON.stringify(DEFAULT_ATTACK_PARAMS)), obsAfter: 1000, justWindow: 176, invincibleWindow: 400, excludeFrameDrops: false };
+
+  T('1. 正規乱数：平均0・分散1・KS', () => {
+    const c = normalRngCheck(makeRng('rng-check'), 200000);
+    return { pass: Math.abs(c.mean) < 0.01 && Math.abs(c.variance - 1) < 0.015 && c.ks < c.ksCrit01, detail: `mean ${c.mean.toFixed(4)} var ${c.variance.toFixed(4)} KS ${c.ks.toExponential(2)} (<${c.ksCrit01.toExponential(2)})` };
+  });
+  T('正規CDF・分位点の精度', () => {
+    const cases = [[0, 0.5], [1.96, 0.9750021048517795], [-3, 0.0013498980316301], [-6, 9.865876450376946e-10]];
+    const err = Math.max(...cases.map(([x, v]) => Math.abs(normCdf(x) - v) / v));
+    let q = 0; for (const p of [1e-6, 0.01, 0.3, 0.5, 0.9, 0.999]) q = Math.max(q, Math.abs(normCdf(normQuantile(p)) - p) / Math.min(p, 1 - p));
+    return { pass: err < 1e-12 && q < 1e-9, detail: `CDF ${err.toExponential(1)}, 分位点 ${q.toExponential(1)}` };
+  });
+  T('2. 正規分布の最尤推定（打ち切り・切断なし）＝標本平均と n で割った SD', () => {
+    const xs = Array.from({ length: 300 }, () => -90 + 45 * rng.normal());
+    const rows = xs.map((e) => ({ e, a: -Infinity, c: Infinity }));
+    const f = fitNormalAttack(rows);
+    const m = mean(xs), s = Math.sqrt(xs.reduce((a, v) => a + (v - m) ** 2, 0) / xs.length);
+    return { pass: close(f.simple.mu, m, 1e-9) && close(f.simple.sigma, s, 1e-9) && close(f.mle.mu, m, 1e-3) && close(f.mle.sigma, s, 1e-3), detail: `閉形式 ${m.toFixed(3)}/${s.toFixed(3)}、数値最尤 ${f.mle.mu.toFixed(3)}/${f.mle.sigma.toFixed(3)}` };
+  });
+  T('3. 既知の μ, σ から生成した人工データの復元（n=5000）', () => {
+    const rows = Array.from({ length: 5000 }, () => ({ a: -2500, c: 1000 }));
+    const sim = simulatePredRows(rows, -100, 45, rng);
+    const f = fitNormalAttack(sim);
+    return { pass: close(f.mle.mu, -100, 3) && close(f.mle.sigma, 45, 2.5), detail: `μ ${f.mle.mu.toFixed(2)} σ ${f.mle.sigma.toFixed(2)}` };
+  });
+  T('4. 打ち切り・切断の尤度が式どおり（f/(1−F(A))、(1−F(C))/(1−F(A))）', () => {
+    const mu = -80, s = 50, A = -150, C = 40;
+    const Fa = normCdf((A - mu) / s), Fc = normCdf((C - mu) / s);
+    const obs = -60, fObs = normPdf((obs - mu) / s) / s / (1 - Fa), fCens = (1 - Fc) / (1 - Fa);
+    const ll = -predNegLL(mu, s, [{ e: obs, a: A, c: C }, { e: null, a: A, c: C }]);
+    return { pass: close(ll, Math.log(fObs) + Math.log(fCens), 1e-10), detail: `${ll.toFixed(10)} vs ${(Math.log(fObs) + Math.log(fCens)).toFixed(10)}` };
+  });
+  T('4b. 強い打ち切り・切断があっても復元（単純平均は偏る）', () => {
+    const rows = Array.from({ length: 6000 }, () => ({ a: -140, c: 0 }));
+    const sim = simulatePredRows(rows, -90, 60, rng);
+    const f = fitNormalAttack(sim);
+    return { pass: close(f.mle.mu, -90, 5) && close(f.mle.sigma, 60, 5) && Math.abs(f.simple.mu + 90) > 5, detail: `最尤 ${f.mle.mu.toFixed(1)}/${f.mle.sigma.toFixed(1)}、単純 ${f.simple.mu.toFixed(1)}/${f.simple.sigma.toFixed(1)}、無入力 ${f.nCens}` };
+  });
+  // 試行ランナー
+  const run = (attack, fps, inputs, jitter = 0) => {
+    const item = { trial_id: attack + '-1', attack, is_practice: false, block_index: 1, index_in_attack: 1, foreperiod_ms: 1234 };
+    const tr = createTrialRunner({ item, settings });
+    let t = 1000; tr.start(t); const pending = inputs.slice(); let k = 0; const views = [];
+    while (!tr.state.done && k++ < 100000) {
+      t += 1000 / fps + (jitter ? (rng.random() - 0.5) * jitter : 0);
+      while (pending.length && pending[0](tr.state) !== null && pending[0](tr.state) <= t) { const at = pending.shift()(tr.state); tr.input({ time: at, eventTs: at, handlerTs: t, device: 'keyboard', code: 'Space', source: 'event' }); }
+      tr.frame(t); views.push(tr.view(t));
+    }
+    return { tr, res: tr.result({ mode: 'individual' }), views };
+  };
+  T('5. 接触時刻と入力誤差の計算（e = T − H）', () => {
+    const { tr, res } = run('aoe', 60, [(s) => (s.H ? s.H - 120 : null)]);
+    const lead = attackTiming('aoe', settings.attacks.aoe).lead;
+    return { pass: close(res.input_error_ms, -120, 1e-9) && close(tr.state.H - tr.state.W, lead, 1e-9) && res.outcome === 'just' && close(res.input_error_ms, res.input_time_ms - res.attack_impact_time_ms, 1e-9), detail: `e ${res.input_error_ms} lead ${lead}` };
+  });
+  T('6. 5 種類の攻撃のデータが混ざらない', () => {
+    const trials = [];
+    for (const a of ATTACKS) for (let i = 0; i < 4; i++) { const r = run(a, 60, [(s) => (s.H ? s.H - 50 - i : null)]).res; trials.push({ ...r, trial_id: `${a}-${i}` }); }
+    const ok = ATTACKS.every((a) => { const rows = rowsFor(trials, a); return rows.length === 4 && rows.every((r) => r.id.startsWith(a)); });
+    return { pass: ok, detail: ATTACKS.map((a) => `${a}:${rowsFor(trials, a).length}`).join(' ') };
+  });
+  T('7. FPS が変わっても理論接触時刻（H − W）が同じ・描画モデルと一致', () => {
+    const det = []; let ok = true;
+    for (const a of ATTACKS) for (const [fps, jit] of [[30, 0], [60, 0], [144, 0], [60, 14]]) {
+      const { tr, views } = run(a, fps, [], jit);
+      const s = tr.state, tm = tr.timing;
+      if (!close(s.H - s.W, tm.lead, 1e-9)) ok = false;
+      // 描画モデル：衝撃波は H で d に、突進は H で距離 0 に
+      if (a === 'shockwave') { const r = shockRadius(s.H, s.W + tm.events.emit, tm.params.speed); if (!close(r, tm.params.distance, 1e-9)) ok = false; }
+      if (a === 'charge') { if (!close(chargeDistance(s.H, s.W + tm.events.runStart, s.H, tm.params.startDistance), 0, 1e-12)) ok = false; }
+      if (s.impactFrame < s.H || s.impactFrame - s.H > 1000 / fps + 8) ok = false;
+      if (fps === 60 && !jit) det.push(`${a} ${tm.lead.toFixed(0)}ms`);
+    }
+    return { pass: ok, detail: det.join(', ') };
+  });
+  T('8. キー入力が 1 試行で二重記録されない', () => {
+    const { res } = run('slam', 60, [(s) => (s.H ? s.H - 100 : null), (s) => (s.H ? s.H - 90 : null), (s) => (s.H ? s.H + 10 : null)]);
+    return { pass: res.ignored_input_count === 2 && close(res.input_error_ms, -100, 1e-9), detail: `ignored ${res.ignored_input_count}` };
+  });
+  T('9. 練習試行が標準の推定に混ざらない', () => {
+    const item = { trial_id: 'roar-P1', attack: 'roar', is_practice: true, block_index: 0, index_in_attack: 1, foreperiod_ms: 900 };
+    const tr = createTrialRunner({ item, settings }); let t = 0; tr.start(t);
+    while (!tr.state.done) { t += 16.7; if (tr.state.H && !tr.state.firstInput && t > tr.state.H - 80) tr.input({ time: t, eventTs: t, handlerTs: t, device: 'keyboard', code: 'Space', source: 'event' }); tr.frame(t); }
+    const res = tr.result({});
+    return { pass: !res.valid_for_fit && /practice/.test(res.invalid_reason) && rowsFor([res], 'roar').length === 0 && rowsFor([res], 'roar', { includePractice: true }).length === 1, detail: res.invalid_reason };
+  });
+  T('無入力は右打ち切り（誤差0にしない）・観測終了時刻あり', () => {
+    const { res } = run('charge', 60, []);
+    return { pass: res.is_censored && res.input_error_ms === null && res.input_time_ms === null && res.outcome === 'no_input' && res.observation_end_ms !== null && close(res.observation_end_ms - res.attack_impact_time_ms, 1000, 1e-9), detail: res.outcome };
+  });
+  T('予兆前の極端に早い入力も記録（有効データ）', () => {
+    const { res } = run('shockwave', 60, [(s) => s.S + 300]);
+    return { pass: res.pre_warning_input && res.valid_for_fit && res.input_error_ms < -2000 && res.outcome === 'early_hit', detail: `e ${res.input_error_ms.toFixed(0)}` };
+  });
+  T('中断試行は推定に使わない', () => {
+    const item = { trial_id: 'aoe-1', attack: 'aoe', is_practice: false, block_index: 1, index_in_attack: 1, foreperiod_ms: 900 };
+    const tr = createTrialRunner({ item, settings }); tr.start(0); tr.frame(16); tr.frame(1000); tr.abort('window_blur', 1100);
+    const res = tr.result({});
+    return { pass: res.status === 'aborted' && !res.valid_for_fit && !res.is_censored && rowsFor([res], 'aoe').length === 0, detail: res.invalid_reason };
+  });
+  T('判定の境界値', () => classify(0, 176, 400) === 'just' && classify(1e-9, 176, 400) === 'late_hit' && classify(-176, 176, 400) === 'just' && classify(-176.001, 176, 400) === 'normal' && classify(-400, 176, 400) === 'normal' && classify(-400.001, 176, 400) === 'early_hit' && classify(null, 176, 400) === 'no_input');
+  T('P_Just の式と最適平均 μ = −J/2', () => {
+    const s = 45, J = 176, f = (m) => pJust(m, s, J);
+    let best = -Infinity, arg = 0; for (let m = -300; m <= 100; m += 0.25) { const v = f(m); if (v > best) { best = v; arg = m; } }
+    const p = normalOutcomeProbs(-90, 45, 176, 400); const sum = p.early_hit + p.normal + p.just + p.late_hit;
+    return { pass: close(arg, -J / 2, 0.25) && close(f(-90), normCdf(90 / 45) - normCdf((-176 + 90) / 45), 1e-15) && close(sum, 1, 1e-12), detail: `argmax ${arg}, P_just(−90) ${f(-90).toFixed(4)}` };
+  });
+  T('観測可能な試行の確率（条件付き）の合計 = 1', () => {
+    const rows = Array.from({ length: 50 }, () => ({ a: -2000 - 1000 * rng.random(), c: 1000 }));
+    const p = conditionalOutcomeProbs(-100, 60, rows, 176, 400); const s = Object.values(p).reduce((x, y) => x + y, 0);
+    return { pass: close(s, 1, 1e-9), detail: `just ${p.just.toFixed(4)}` };
+  });
+  T('混合測定の計画：攻撃ごとの回数が均衡・3 連続なし・シード再現', () => {
+    const cfg = { mode: 'mixed', mixedPerAttack: 50, mixedPractice: 10, blockSize: 25, itiRange: [1000, 2500] };
+    const p1 = buildPlan(cfg, 's1'), p2 = buildPlan(cfg, 's1');
+    const main = p1.queue.filter((q) => !q.is_practice);
+    const counts = ATTACKS.map((a) => main.filter((q) => q.attack === a).length);
+    let run3 = false; for (let i = 2; i < p1.queue.length; i++) if (p1.queue[i].attack === p1.queue[i - 1].attack && p1.queue[i].attack === p1.queue[i - 2].attack) run3 = true;
+    const perBlock = [...new Set(main.map((q) => q.block_index))].map((b) => ATTACKS.map((a) => main.filter((q) => q.block_index === b && q.attack === a).length).join(''));
+    return { pass: counts.every((c) => c === 50) && !run3 && JSON.stringify(p1) === JSON.stringify(p2) && perBlock.every((s) => s === '55555') && p1.queue.filter((q) => q.is_practice).length === 10, detail: `counts ${counts.join('/')} blocks ${perBlock.length}` };
+  });
+  T('偏りの統計量（歪度・外れ値・Q-Q）', () => {
+    const xs = Array.from({ length: 4000 }, () => rng.normal());
+    const sk = skewness(xs), ku = excessKurtosis(xs), oi = outlierInfo(xs);
+    const qq = qqPoints(xs, 0, 1); const r = pearson(qq.map((p) => p[0]), qq.map((p) => p[1]));
+    const ex = Array.from({ length: 4000 }, () => -Math.log(rng.openUnit()));
+    return { pass: Math.abs(sk) < 0.15 && Math.abs(ku) < 0.3 && oi.fraction < 0.015 && r > 0.998 && skewness(ex) > 1.5, detail: `歪度 ${sk.toFixed(3)} 尖度 ${ku.toFixed(3)} 外れ値 ${(100 * oi.fraction).toFixed(2)}% QQ相関 ${r.toFixed(4)}` };
+  });
+  T('CSV：必須列・null は空欄', () => {
+    const csv = toCSV([{ session_id: 's', trial_id: 'x,1', attack_type: 'roar', input_time_ms: null, input_error_ms: -12.3456789 }]);
+    const head = csv.split('\r\n')[0].split(',');
+    const need = ['session_id', 'trial_id', 'attack_type', 'measurement_mode', 'is_practice', 'valid_for_fit', 'invalid_reason', 'attack_warning_time_ms', 'attack_impact_time_ms', 'input_time_ms', 'input_error_ms', 'outcome', 'is_censored', 'observation_start_ms', 'observation_end_ms', 'input_device', 'input_event_timestamp_ms', 'input_handler_timestamp_ms', 'just_window_ms', 'invincible_window_ms', 'attack_parameter_json', 'estimated_fps', 'frame_p95_ms', 'frame_max_ms', 'focus_lost', 'timestamp_utc'];
+    return { pass: need.every((k) => head.includes(k)) && csv.includes('"x,1"') && csv.includes(',-12.345679,'), detail: `${head.length} 列` };
+  });
+  return out;
+}
+
+
+return {
+  VERSION, ATTACKS, ATTACK_LABEL, DEFAULT_ATTACK_PARAMS,
+  makeRng, hashSeed, shuffleInPlace,
+  normCdf, normSf, normPdf, logNormCdf, logNormSf, normQuantile,
+  makePred, predLogPdf, predLogSf, predCdf, predSample, predNegLL,
+  classify, outcomeProbs, minimize, hessian, invertMatrix,
+  mean, sd, quantile, quantileSorted, describe, frameStats, trendCheck, movingAverage, pearson, ksUniform, adUniform,
+  fitPredictive, simulatePredRows, fitNormalAttack, normalOutcomeProbs, pJust, conditionalOutcomeProbs, optimalMu,
+  skewness, excessKurtosis, outlierInfo, qqPoints, normalRngCheck,
+  attackTiming, shockRadius, chargeDistance, buildPlan, stratifiedSequence, createTrialRunner, rowsFor,
+  CSV_COLUMNS, toCSV, timingKey, runCoreTests,
+};
+})();
+
+/* ============================================================================
+ * Scene3D — Three.js による 3D 描画。計測には関与しない（view を読むだけ）。
+ * 各攻撃の動きは view.W（予兆を初めて描画したフレーム）と view.timing（attackTiming）から
+ * 実時間で計算し、判定と同じ接触時刻 H を使う。
+ * ========================================================================== */
+async function createScene3D(container, opts) {
+  const THREE = await loadThree();
+  const quality = opts.quality || 'high';
+  const fx = { low: 0.4, standard: 1.0, high: 1.6 }[opts.effects || 'standard'];
+
+  const renderer = new THREE.WebGLRenderer({ antialias: quality !== 'low', powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : quality === 'medium' ? 1.5 : 1));
+  renderer.shadowMap.enabled = quality !== 'low';
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  container.appendChild(renderer.domElement);
+  renderer.domElement.className = 'gl';
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05070d);
+  scene.fog = new THREE.FogExp2(0x05070d, 0.024);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+  const camBase = new THREE.Vector3(2.6, 5.0, 7.8), camTarget = new THREE.Vector3(-0.2, 1.5, -5.0);
+
+  /* ---- 光源・地面 ---- */
+  scene.add(new THREE.HemisphereLight(0x46679c, 0x08090e, 0.8));
+  const key = new THREE.DirectionalLight(0xd6e6ff, 1.6);
+  key.position.set(6, 13, 8); key.castShadow = quality !== 'low';
+  key.shadow.mapSize.set(quality === 'high' ? 2048 : 1024, quality === 'high' ? 2048 : 1024);
+  Object.assign(key.shadow.camera, { left: -14, right: 14, top: 12, bottom: -18, near: 1, far: 60 });
+  key.shadow.bias = -0.0005; key.target.position.set(0, 0, -5); scene.add(key, key.target);
+  const rim = new THREE.DirectionalLight(0x40e0ff, 0.7); rim.position.set(-6, 5, -10); scene.add(rim);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), new THREE.MeshStandardMaterial({ color: 0x0b111d, roughness: 0.85, metalness: 0.2 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const grid = new THREE.GridHelper(90, 90, 0x1e5a80, 0x0f2638); grid.material.transparent = true; grid.material.opacity = 0.4; grid.position.y = 0.002; scene.add(grid);
+  // 基準位置（小さな十字）
+  const refMat = new THREE.MeshBasicMaterial({ color: 0x45e3ff, transparent: true, opacity: 0.35 });
+  for (const r of [0, Math.PI / 2]) { const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.05), refMat); bar.rotation.set(-Math.PI / 2, 0, r); bar.position.y = 0.012; scene.add(bar); }
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.7, 40), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.006; scene.add(blob);
+
+  /* ---- プレイヤー ---- */
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1c2740, roughness: 0.45, metalness: 0.55 });
+  const armorMat = new THREE.MeshStandardMaterial({ color: 0x33496f, roughness: 0.35, metalness: 0.7, emissive: 0x06202e, emissiveIntensity: 0.6 });
+  const glowMat = new THREE.MeshStandardMaterial({ color: 0x8ff4ff, emissive: 0x3fe6ff, emissiveIntensity: 2.2 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9c6b6, roughness: 0.7 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x15161c, roughness: 0.6 });
+  function limb(len, r, mat) { const pivot = new THREE.Group(); const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat); m.position.y = -len / 2 - r * 0.2; m.castShadow = true; pivot.add(m); return pivot; }
+  function buildHuman(mo) {
+    const M = (m) => mo || m;
+    const root = new THREE.Group();
+    const hips = new THREE.Group(); hips.position.y = 0.95; root.add(hips);
+    const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.18, 0.22), M(bodyMat)); pelvis.castShadow = true; hips.add(pelvis);
+    const spine = new THREE.Group(); spine.position.y = 0.08; hips.add(spine);
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 6, 14), M(bodyMat)); torso.position.y = 0.3; torso.castShadow = true; spine.add(torso);
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.26, 0.28), M(armorMat)); chest.position.y = 0.42; chest.castShadow = true; spine.add(chest);
+    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 0.55, 14, 1, true), M(armorMat)); coat.position.y = -0.12; coat.castShadow = true; hips.add(coat);
+    const neck = new THREE.Group(); neck.position.y = 0.62; spine.add(neck);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), M(skinMat)); head.position.y = 0.15; head.castShadow = true; neck.add(head);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.162, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), M(hairMat)); hair.position.y = 0.17; hair.rotation.x = 0.25; neck.add(hair);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.03), M(glowMat)); visor.position.set(0, 0.17, -0.14); neck.add(visor);
+    const mk = (side) => {
+      const sh = new THREE.Group(); sh.position.set(0.27 * side, 0.5, 0); spine.add(sh);
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), M(armorMat)); pad.castShadow = true; sh.add(pad);
+      const upper = limb(0.26, 0.065, M(bodyMat)); sh.add(upper);
+      const elbow = new THREE.Group(); elbow.position.y = -0.36; upper.add(elbow); elbow.add(limb(0.24, 0.058, M(armorMat)));
+      const hip = new THREE.Group(); hip.position.set(0.11 * side, -0.06, 0); hips.add(hip);
+      const thigh = limb(0.34, 0.085, M(bodyMat)); hip.add(thigh);
+      const knee = new THREE.Group(); knee.position.y = -0.46; thigh.add(knee); knee.add(limb(0.32, 0.072, M(armorMat)));
+      return { sh, elbow, hip, knee };
+    };
+    const L = mk(-1), R = mk(1);
+    const sword = new THREE.Group(); sword.position.set(0.05, 0.45, 0.17); sword.rotation.z = 0.6; spine.add(sword);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.015), M(glowMat)); blade.position.y = 0.2; sword.add(blade);
+    root.userData = { hips, spine, neck, L, R };
+    return root;
+  }
+  const player = buildHuman(null); scene.add(player);
+  const ghosts = [];
+  for (let i = 0; i < 5; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x46e8ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const g = buildHuman(mat); g.traverse((o) => { o.castShadow = false; }); g.visible = false; g.userData.mat = mat; scene.add(g); ghosts.push(g);
+  }
+  function poseHuman(h, t, s) {
+    const u = h.userData;
+    u.hips.position.y = 0.95 - s.crouch * 0.18 + Math.sin(t * 2.1) * 0.012;
+    u.spine.rotation.x = 0.08 + s.crouch * 0.25 + s.lean; u.spine.rotation.z = s.tilt; u.neck.rotation.x = -0.1 - s.crouch * 0.15;
+    for (const [side, P] of [[-1, u.L], [1, u.R]]) {
+      P.sh.rotation.x = -0.25 + Math.sin(t * 1.3 + side) * 0.04 - s.arms * 0.6; P.sh.rotation.z = side * (0.18 + s.arms * 0.5);
+      P.elbow.rotation.x = -0.5 - s.arms * 0.6;
+      P.hip.rotation.x = -0.12 - s.crouch * 0.5 + (side > 0 ? s.stride : -s.stride); P.hip.rotation.z = side * 0.08;
+      P.knee.rotation.x = 0.25 + s.crouch * 0.9;
+    }
+  }
+
+  /* ---- 敵（大槌を持つ巨兵） ---- */
+  const SWING_PIVOT = new THREE.Vector3(0, 2.6, 0.4), HAMMER_LEN = 3.3;
+  const PHI_SLAM = -Math.acos((SWING_PIVOT.y - 0.45) / HAMMER_LEN);
+  const SLAM_REACH = SWING_PIVOT.z + HAMMER_LEN * Math.sin(-PHI_SLAM);   // 敵の位置から槌の着地点までの前方距離
+  const PHI_RAISED = Math.PI - 0.62, PHI_REST = -0.25, PHI_SLAM2 = PHI_SLAM + Math.PI * 2, PHI_REST2 = PHI_REST + Math.PI * 2;
+  const enemy = new THREE.Group(); scene.add(enemy);
+  const eMat = new THREE.MeshStandardMaterial({ color: 0x241a24, roughness: 0.55, metalness: 0.6, emissive: 0x000000 });
+  const eArmor = new THREE.MeshStandardMaterial({ color: 0x3b2430, roughness: 0.4, metalness: 0.7, emissive: 0x000000 });
+  const eCoreMat = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff4a12, emissiveIntensity: 1.2 });
+  const eHeadGlow = new THREE.MeshStandardMaterial({ color: 0x5a2a2a, emissive: 0xff3a1a, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.5 });
+  const eTorso = new THREE.Group(); eTorso.position.y = 1.4; enemy.add(eTorso);
+  const eBody = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 1.1), eArmor); eBody.position.y = 0.7; eBody.castShadow = true; eTorso.add(eBody);
+  const eBelly = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.75, 0.8, 8), eMat); eBelly.position.y = -0.3; eBelly.castShadow = true; eTorso.add(eBelly);
+  const eNeck = new THREE.Group(); eNeck.position.y = 1.5; eTorso.add(eNeck);
+  const eHead = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), eArmor); eHead.position.y = 0.3; eHead.castShadow = true; eNeck.add(eHead);
+  const eEye = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.05), eCoreMat); eEye.position.set(0, 0.36, 0.38); eNeck.add(eEye);
+  const eJaw = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.4), eMat); eJaw.position.set(0, 0.0, 0.14); eNeck.add(eJaw);
+  const eMouth = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.02, 0.05), eCoreMat); eMouth.position.set(0, 0.1, 0.36); eNeck.add(eMouth);
+  const eCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), eCoreMat); eCore.position.set(0, 0.75, 0.58); eTorso.add(eCore);
+  const eLegs = [];
+  for (const side of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(0.5 * side, 1.1, 0); enemy.add(hip);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.6), eMat); leg.position.y = -0.55; leg.castShadow = true; hip.add(leg); eLegs.push(hip);
+    const pad = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), eArmor); pad.position.set(1.0 * side, 1.15, 0); pad.castShadow = true; eTorso.add(pad);
+  }
+  const swing = new THREE.Group(); swing.position.copy(SWING_PIVOT); enemy.add(swing);
+  for (const side of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.3, 0.45), eMat); arm.position.set(0.55 * side, -0.6, 0); arm.rotation.z = -side * 0.35; arm.castShadow = true; swing.add(arm); }
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 2.6, 10), eArmor); handle.position.y = -2.1; handle.castShadow = true; swing.add(handle);
+  const hammer = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 0.9), eHeadGlow); hammer.position.y = -HAMMER_LEN; hammer.castShadow = true; swing.add(hammer);
+  const hammerBand = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.12, 0.92), eCoreMat); hammerBand.position.y = -HAMMER_LEN; swing.add(hammerBand);
+  const eLight = new THREE.PointLight(0xff5a1e, 0, 14, 2); eLight.position.set(0, 2.2, 1.2); enemy.add(eLight);
+  const redLight = new THREE.PointLight(0xff1020, 0, 12, 2); redLight.position.set(0, 2.6, 1.0); enemy.add(redLight);
+
+  /* ---- 汎用エフェクト ---- */
+  const radTex = (stops) => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); stops.forEach(([o, col]) => g.addColorStop(o, col)); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); };
+  const dotTex = radTex([[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,190,130,0.8)'], [1, 'rgba(255,60,80,0)']]);
+  const dustTex = radTex([[0, 'rgba(200,190,175,0.9)'], [0.5, 'rgba(140,130,120,0.4)'], [1, 'rgba(90,85,80,0)']]);
+  const flashTex = radTex([[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,200,140,0.9)'], [1, 'rgba(255,40,90,0)']]);
+  function makeParticles(n, tex, size, color, blending) {
+    const pos = new Float32Array(n * 3), vel = new Float32Array(n * 3), life = new Float32Array(n);
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size, map: tex, transparent: true, depthWrite: false, blending, color }));
+    pts.frustumCulled = false; scene.add(pts);
+    for (let i = 0; i < n; i++) pos[i * 3 + 1] = -10;
+    let cur = 0;
+    return {
+      spawn(x, y, z, vx, vy, vz, l) { const i = cur; cur = (cur + 1) % n; pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z; vel[i * 3] = vx; vel[i * 3 + 1] = vy; vel[i * 3 + 2] = vz; life[i] = l; },
+      update(dt, g) { for (let i = 0; i < n; i++) if (life[i] > 0) { life[i] -= dt; pos[i * 3] += vel[i * 3] * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += vel[i * 3 + 2] * dt; vel[i * 3 + 1] -= g * dt; if (pos[i * 3 + 1] < 0) { pos[i * 3 + 1] = 0; vel[i * 3 + 1] *= -0.2; } if (life[i] <= 0) pos[i * 3 + 1] = -10; } geo.attributes.position.needsUpdate = true; },
+      clear() { for (let i = 0; i < n; i++) { life[i] = 0; pos[i * 3 + 1] = -10; } geo.attributes.position.needsUpdate = true; },
+    };
+  }
+  const sparks = makeParticles(Math.round(900 * fx), dotTex, 0.16, 0xffb08a, THREE.AdditiveBlending);
+  const dust = makeParticles(Math.round(500 * fx), dustTex, 0.55, 0xb8b0a4, THREE.NormalBlending);
+  const flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })); scene.add(flash);
+  const hitFlash = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })); hitFlash.position.set(0, 1, 0); scene.add(hitFlash);
+
+  // クレーター（叩きつけ地点）
+  const craterMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uAge: { value: 99 } },
+    vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    fragmentShader: `uniform float uAge; varying vec2 vP; float h(float x){ return fract(sin(x * 91.7) * 43758.5); }
+      void main(){ float r = length(vP); float a = atan(vP.y, vP.x); float k = floor((a + 3.1416) / 6.2832 * 22.0); float jag = 0.04 + 0.05 * h(k);
+        float crack = smoothstep(jag, 0.0, abs(fract((a + 3.1416) / 6.2832 * 22.0 + 0.15 * sin(r * 5.0 + k)) - 0.5) * r * 0.9);
+        float pit = smoothstep(1.3, 0.0, r); float life = exp(-uAge / 1.2); float glow = crack * smoothstep(3.0, 0.4, r) * life;
+        vec3 c = mix(vec3(0.02, 0.01, 0.01), vec3(1.0, 0.45, 0.2), glow);
+        float alpha = clamp(pit * 0.85 * min(1.0, uAge * 8.0 + 0.2) * (0.35 + 0.65 * exp(-uAge / 4.0)) + glow, 0.0, 1.0);
+        if (uAge > 50.0) alpha = 0.0; gl_FragColor = vec4(c, alpha); }`,
+  });
+  const crater = new THREE.Mesh(new THREE.CircleGeometry(3.0, 64), craterMat); crater.rotation.x = -Math.PI / 2; crater.position.y = 0.015; scene.add(crater);
+
+  /* ---- 衝撃波（立体的な円環） ---- */
+  function waveGeometry(profile, segments) {
+    const pos = [], idx = [], aOff = [], aAng = [], aV = [];
+    for (let s = 0; s <= segments; s++) { const ang = (s / segments) * Math.PI * 2; for (let k = 0; k < profile.length; k++) { pos.push(0, profile[k][1], 0); aOff.push(profile[k][0]); aAng.push(ang); aV.push(k / (profile.length - 1)); } }
+    const P = profile.length;
+    for (let s = 0; s < segments; s++) for (let k = 0; k < P - 1; k++) { const a = s * P + k, b = (s + 1) * P + k; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aOff', new THREE.Float32BufferAttribute(aOff, 1));
+    g.setAttribute('aAng', new THREE.Float32BufferAttribute(aAng, 1)); g.setAttribute('aV', new THREE.Float32BufferAttribute(aV, 1));
+    g.setIndex(idx); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4); return g;
+  }
+  const waveVS = `attribute float aOff; attribute float aAng; attribute float aV; uniform float uR; varying float vV; varying float vAng;
+    void main(){ float r = max(0.0, uR + aOff); vec3 p = vec3(sin(aAng) * r, position.y * smoothstep(0.0, 0.6, uR), cos(aAng) * r); vV = aV; vAng = aAng; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`;
+  const waveFS = `uniform vec3 uColor; uniform vec3 uHot; uniform float uAlpha; uniform float uTime; varying float vV; varying float vAng;
+    void main(){ float edge = 1.0 - vV; float flick = 0.85 + 0.15 * sin(vAng * 40.0 + uTime * 30.0); vec3 col = mix(uColor, uHot, pow(edge, 3.0)); gl_FragColor = vec4(col * (0.6 + 1.6 * edge), uAlpha * (0.25 + 0.75 * pow(edge, 1.6)) * flick); }`;
+  const mkWaveMat = (color, hot, alpha) => new THREE.ShaderMaterial({ vertexShader: waveVS, fragmentShader: waveFS, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uR: { value: 0 }, uColor: { value: new THREE.Color(color) }, uHot: { value: new THREE.Color(hot) }, uAlpha: { value: alpha }, uTime: { value: 0 } } });
+  const seg = quality === 'low' ? 96 : 192;
+  const waveBody = new THREE.Mesh(waveGeometry([[0, 0.02], [-0.05, 0.55], [-0.22, 0.95], [-0.6, 0.7], [-1.3, 0.3], [-2.4, 0.03]], seg), mkWaveMat(0xff3d6e, 0xfff0e0, 0.55));
+  const waveCrest = new THREE.Mesh(waveGeometry([[0.02, 0.0], [0.0, 0.25], [-0.06, 1.0], [-0.14, 1.15]], seg), mkWaveMat(0xff8a3d, 0xffffff, 0.9));
+  const waveGroup = new THREE.Group(); waveGroup.add(waveBody, waveCrest); waveGroup.visible = false; scene.add(waveGroup);
+  const trailMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uR: { value: 0 }, uAlpha: { value: 0 } },
+    vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    fragmentShader: `uniform float uR; uniform float uAlpha; varying vec2 vP; void main(){ float d = length(vP); float x = uR - d; if (x < 0.0) discard;
+      float t = exp(-x / 0.9); float ring = exp(-x * 7.0); float streak = 0.6 + 0.4 * sin(atan(vP.y, vP.x) * 90.0 + d * 3.0);
+      gl_FragColor = vec4(mix(vec3(1.0,0.25,0.35), vec3(1.0,0.75,0.4), ring), uAlpha * (0.18 * t * streak + 0.7 * ring)); }`,
+  });
+  const trail = new THREE.Mesh(new THREE.CircleGeometry(40, 128), trailMat); trail.rotation.x = -Math.PI / 2; trail.position.y = 0.012; trail.visible = false; scene.add(trail);
+  const NR = quality === 'low' ? 90 : 220;
+  const rubble = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.16, 0), new THREE.MeshStandardMaterial({ color: 0x3a2a2c, roughness: 0.9, emissive: 0x401008, emissiveIntensity: 0.6 }), NR);
+  rubble.frustumCulled = false; rubble.visible = false; scene.add(rubble);
+  const rubAng = new Float32Array(NR), rubSeed = new Float32Array(NR);
+  for (let i = 0; i < NR; i++) { rubAng[i] = (i / NR) * Math.PI * 2; const h = Math.sin(i * 78.233) * 43758.5453; rubSeed[i] = h - Math.floor(h); }
+  const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), tmpS = new THREE.Vector3();
+
+  /* ---- AoE（足元の危険範囲と爆発） ---- */
+  const AOE_R = 2.2;
+  const aoeMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, uniforms: { uAlpha: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    // 残り時間を示す縮小・点滅はしない（静止した表示）。細かな揺らぎは非周期的な小さいノイズのみ
+    fragmentShader: `uniform float uAlpha; uniform float uTime; varying vec2 vP; float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+      void main(){ float r = length(vP) / ${AOE_R.toFixed(2)}; if (r > 1.0) discard;
+        float rim = smoothstep(0.9, 0.97, r) * (1.0 - smoothstep(0.985, 1.0, r));
+        float fill = 0.22 + 0.1 * smoothstep(0.2, 0.9, r);
+        float hatch = step(0.5, fract((vP.x + vP.y) * 2.5)) * 0.05;
+        gl_FragColor = vec4(vec3(1.0, 0.12, 0.12), uAlpha * (fill + hatch + rim * 0.8)); }`,
+  });
+  const aoeDisk = new THREE.Mesh(new THREE.CircleGeometry(AOE_R, 96), aoeMat); aoeDisk.rotation.x = -Math.PI / 2; aoeDisk.position.y = 0.02; aoeDisk.visible = false; scene.add(aoeDisk);
+  const fireMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uAge: { value: 0 } },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    fragmentShader: `uniform float uAge; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+      void main(){ float n = h(floor(vUv * vec2(24.0, 10.0)) + floor(uAge * 30.0)); float a = (1.0 - vUv.y) * (0.6 + 0.4 * n) * exp(-uAge * 3.2);
+        gl_FragColor = vec4(mix(vec3(1.0,0.35,0.1), vec3(1.0,0.9,0.6), 1.0 - vUv.y), a); }`,
+  });
+  const fire = new THREE.Mesh(new THREE.CylinderGeometry(AOE_R, AOE_R * 0.9, 4, 48, 1, true), fireMat); fire.position.y = 2; fire.visible = false; scene.add(fire);
+
+  /* ---- 咆哮（空気の歪み・半透明の衝撃） ---- */
+  const roarMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uAlpha: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uAlpha; uniform float uTime; varying vec3 vN; varying vec3 vV;
+      void main(){ float fr = pow(1.0 - abs(dot(vN, vV)), 2.5); float band = 0.7 + 0.3 * sin(uTime * 40.0 + vN.y * 20.0);
+        gl_FragColor = vec4(mix(vec3(0.9,0.95,1.0), vec3(1.0,0.35,0.35), 0.4), uAlpha * fr * band); }`,
+  });
+  const roarShells = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), roarMat.clone()); m.visible = false; scene.add(m); return m; });
+  const roarRingMat = new THREE.MeshBasicMaterial({ color: 0xffd0d0, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+  const roarRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1.0, 96), roarRingMat); roarRing.rotation.x = -Math.PI / 2; roarRing.position.y = 0.05; scene.add(roarRing);
+
+  /* ---- サイズ ---- */
+  function resize() {
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.9 ? 66 : 50; camera.updateProjectionMatrix();
+  }
+  resize();
+
+  /* ---- 描画 ---- */
+  const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+  const easeIn = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c; };
+  const clamp01 = (x) => Math.min(1, Math.max(0, x));
+  let lastTs = null, shake = 0, lastBurst = null, lastAttack = null;
+  const ghostSnaps = [];
+  const enemyHome = (attack, timing) => {
+    const p = timing ? timing.params : {};
+    switch (attack) {
+      case 'charge': return -(p.startDistance + 0.9);
+      case 'slam': return -SLAM_REACH;
+      case 'shockwave': return -(p.distance + SLAM_REACH);
+      case 'aoe': return -7.5;
+      case 'roar': return -6;
+      default: return -7;
+    }
+  };
+  function burst(x, z, n, power) {
+    for (let k = 0; k < n * fx; k++) {
+      const ang = Math.random() * Math.PI * 2, rr = Math.random() * 0.8, sp = (1.5 + Math.random() * 3.5) * power;
+      sparks.spawn(x + Math.sin(ang) * rr, 0.2, z + Math.cos(ang) * rr, Math.sin(ang) * sp, 2.5 + Math.random() * 3.5 * power, Math.cos(ang) * sp, 0.4 + Math.random() * 0.6);
+      if (k % 2 === 0) dust.spawn(x + Math.sin(ang) * rr, 0.3, z + Math.cos(ang) * rr, Math.sin(ang) * sp * 0.4, 0.8 + Math.random(), Math.cos(ang) * sp * 0.4, 0.8 + Math.random() * 0.8);
+    }
+  }
+
+  function render(view, ts, ui) {
+    const t = ts / 1000;
+    const dt = lastTs === null ? 0.016 : Math.min(0.1, (ts - lastTs) / 1000); lastTs = ts;
+    const attack = view ? view.attack : (ui && ui.previewAttack) || 'slam';
+    const tm = view ? view.timing : null;
+    if (attack !== lastAttack) { lastAttack = attack; sparks.clear(); dust.clear(); lastBurst = null; }
+    const W = view ? view.W : null, H = view ? view.H : null;
+    const since = W !== null && W !== undefined ? ts - W : -1; // 予兆開始からの経過（未開始なら負）
+    const ev = tm ? tm.events : {};
+
+    // 敵の既定姿勢
+    let ez = enemyHome(attack, tm), ery = 0, phi = PHI_REST, tilt = 0, drop = 0, legSwing = 0, glowCharge = 0, red = 0, neckUp = 0, jaw = 0;
+    let craterAt = null, craterAge = 99, burstKey = null, burstPos = null;
+    let showWave = false, R = 0, waveCenterZ = 0, waveFade = 1;
+    let aoeAlpha = 0, fireAge = -1, roarAge = -1;
+
+    if (attack === 'charge') {
+      ery = 1.25; // 横を向いて待機
+      if (W !== null && since >= 0) {
+        const runStart = W + ev.runStart;
+        ery = 1.25 * (1 - ease(since / ev.turnEnd));                                 // 向き直る
+        const crouchP = clamp01((since - ev.turnEnd) / Math.max(1, ev.runStart - ev.turnEnd));
+        tilt = 0.35 * ease(crouchP); drop = 0.35 * ease(crouchP); glowCharge = ease(crouchP);
+        const dist = Core.chargeDistance(ts, runStart, H, tm.params.startDistance);  // 判定と同じ式（H で距離 0）
+        ez = -(dist + 0.9);
+        if (ts >= runStart && ts < H) { legSwing = Math.sin((ts - runStart) / 1000 * 22); tilt = 0.5; drop = 0.15; if (Math.random() < 0.6 * fx) dust.spawn((Math.random() - 0.5) * 1.2, 0.2, ez + 0.6, 0, 0.6 + Math.random(), 1 + Math.random(), 0.8); }
+        if (ts >= H) { tilt = 0.5 * (1 - clamp01((ts - H) / 500)); burstKey = 'c' + H; burstPos = [0, -0.3]; }
+      }
+      phi = PHI_REST;
+    } else if (attack === 'slam') {
+      if (W !== null && since >= 0) {
+        const raiseP = ease(since / ev.raiseEnd), swingStart = W + ev.swingStart;
+        phi = PHI_REST + (PHI_RAISED - PHI_REST) * raiseP; tilt = -0.12 * raiseP; glowCharge = raiseP;
+        if (ts >= swingStart && ts < H) { const p = (ts - swingStart) / Math.max(1, H - swingStart); phi = PHI_RAISED + (PHI_SLAM2 - PHI_RAISED) * (0.06 + 0.94 * p * p); tilt = 0.32 * p; drop = 0.25 * p; }
+        if (ts >= H) { const rec = ease((ts - H - 650) / 700); phi = PHI_SLAM2 + (PHI_REST2 - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec); craterAt = 0; craterAge = (ts - H) / 1000; burstKey = 's' + H; burstPos = [0, 0]; }
+      }
+    } else if (attack === 'shockwave') {
+      const emit = W !== null ? W + ev.emit : null;
+      waveCenterZ = ez + SLAM_REACH;
+      if (W !== null && since >= 0) {
+        const downStart = emit - Math.min(220, ev.emit * 0.4);
+        const raiseP = ease(since / Math.max(1, downStart - W));
+        phi = PHI_REST + (PHI_RAISED - PHI_REST) * raiseP; tilt = -0.12 * raiseP; glowCharge = raiseP;
+        if (ts >= downStart && ts < emit) { const p = (ts - downStart) / (emit - downStart); phi = PHI_RAISED + (PHI_SLAM2 - PHI_RAISED) * Math.min(0.97, p * p); tilt = 0.3 * p; }
+        if (ts >= emit) {
+          const rec = ease((ts - emit - 650) / 700); phi = PHI_SLAM2 + (PHI_REST2 - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec);
+          craterAt = waveCenterZ; craterAge = (ts - emit) / 1000; burstKey = 'w' + emit; burstPos = [0, waveCenterZ];
+          R = Core.shockRadius(ts, emit, tm.params.speed);                            // 判定と同じ式（H で R = d）
+          showWave = ts < H + 600; waveFade = ts > H ? 1 - clamp01((ts - H) / 600) : 1;
+        }
+      }
+    } else if (attack === 'aoe') {
+      if (W !== null && since >= 0) {
+        const show = W + ev.aoeShow;
+        const castP = ease(since / ev.aoeShow);
+        phi = PHI_REST + (PHI_RAISED * 0.75 - PHI_REST) * castP; glowCharge = castP; tilt = -0.1 * castP;
+        if (ts >= show && ts < H) aoeAlpha = 1;                                        // 一定の表示（縮小・カウントダウンなし）
+        if (ts >= H) { aoeAlpha = 0; fireAge = (ts - H) / 1000; burstKey = 'a' + H; burstPos = [0, 0]; phi = PHI_RAISED * 0.75 * (1 - ease((ts - H) / 600)); }
+      }
+    } else if (attack === 'roar') {
+      if (W !== null && since >= 0) {
+        if (ts < H) { red = 1; neckUp = 0.15 * ease(since / Math.max(1, H - W)); }   // 赤発光（固定時間）
+        else { const a = (ts - H) / 1000; red = Math.max(0, 1 - a * 2); neckUp = 0.55 * (1 - ease((a - 0.6) / 0.5)); jaw = 1 - ease((a - 0.6) / 0.5); roarAge = a; tilt = -0.15 * jaw; }
+      }
+    }
+
+    enemy.position.set(0, 0, ez); enemy.rotation.y = ery;
+    swing.rotation.x = phi; eTorso.rotation.x = tilt; eTorso.position.y = 1.4 - drop;
+    eLegs[0].rotation.x = 0.6 * legSwing; eLegs[1].rotation.x = -0.6 * legSwing;
+    eNeck.rotation.x = -neckUp; eJaw.position.y = -0.18 * jaw; eJaw.rotation.x = 0.5 * jaw;
+    eCoreMat.emissiveIntensity = 1 + 3 * glowCharge; eHeadGlow.emissiveIntensity = 0.4 + 2.2 * glowCharge;
+    eLight.intensity = 2 + 8 * glowCharge;
+    eArmor.emissive.setRGB(0.9 * red, 0.02 * red, 0.02 * red); eMat.emissive.setRGB(0.6 * red, 0, 0);
+    redLight.intensity = 18 * red;
+    craterMat.uniforms.uAge.value = craterAge; if (craterAt !== null) crater.position.z = craterAt;
+    if (burstKey && burstKey !== lastBurst) { lastBurst = burstKey; burst(burstPos[0], burstPos[1], attack === 'aoe' ? 220 : 140, attack === 'aoe' ? 1.5 : 1); shake = Math.max(shake, attack === 'charge' ? 0.12 : 0.07); }
+
+    // 衝撃波
+    waveGroup.visible = trail.visible = rubble.visible = showWave;
+    if (showWave) {
+      waveGroup.position.set(0, 0, waveCenterZ); trail.position.z = waveCenterZ;
+      for (const m of [waveBody.material, waveCrest.material]) { m.uniforms.uR.value = R; m.uniforms.uTime.value = t; }
+      waveBody.material.uniforms.uAlpha.value = 0.55 * waveFade; waveCrest.material.uniforms.uAlpha.value = 0.95 * waveFade;
+      trailMat.uniforms.uR.value = R; trailMat.uniforms.uAlpha.value = 0.7 * waveFade;
+      for (let i = 0; i < NR; i++) {
+        const rr = Math.max(0, R - 0.25 - 0.5 * rubSeed[i]); const lift = Math.sin(Math.min(1, R / 1.2) * Math.PI * 0.5) * (0.25 + 0.55 * rubSeed[i]) * waveFade;
+        tmpP.set(Math.sin(rubAng[i]) * rr, lift * 0.5, waveCenterZ + Math.cos(rubAng[i]) * rr); tmpE.set(rubSeed[i] * 6 + t * 3, rubAng[i], rubSeed[i] * 3); tmpQ.setFromEuler(tmpE);
+        const sc = (0.6 + 1.2 * rubSeed[i]) * (0.4 + 0.6 * waveFade); tmpS.set(sc, sc * (0.8 + lift), sc); tmpM.compose(tmpP, tmpQ, tmpS); rubble.setMatrixAt(i, tmpM);
+      }
+      rubble.instanceMatrix.needsUpdate = true;
+      const n = Math.min(60, Math.floor(dt * 2000 * fx));
+      for (let k = 0; k < n; k++) { const ang = (Math.random() - 0.5) * (Math.random() < 0.7 ? 2.4 : 6.28), rr = R - Math.random() * 0.3; sparks.spawn(Math.sin(ang) * rr, Math.random() * 0.4, waveCenterZ + Math.cos(ang) * rr, Math.sin(ang), 1 + Math.random() * 2.5, Math.cos(ang), 0.3 + Math.random() * 0.4); }
+    }
+    // 発生／接触の閃光
+    let fl = 0, flz = 0;
+    if (attack === 'shockwave' && W !== null && ts >= W + ev.emit) { fl = 1 - clamp01((ts - W - ev.emit) / 280); flz = waveCenterZ; }
+    if ((attack === 'slam' || attack === 'charge') && H !== null && ts >= H) { fl = 1 - clamp01((ts - H) / 250); flz = attack === 'charge' ? -0.4 : 0; }
+    flash.material.opacity = fl; flash.position.set(0, 0.8, flz); flash.scale.setScalar(2 + 4 * (1 - fl));
+    // AoE
+    aoeDisk.visible = aoeAlpha > 0; aoeMat.uniforms.uAlpha.value = aoeAlpha;
+    fire.visible = fireAge >= 0 && fireAge < 1.2; if (fire.visible) { fireMat.uniforms.uAge.value = fireAge; fire.scale.set(1 + fireAge * 0.6, 0.3 + 1.5 * ease(fireAge / 0.15), 1 + fireAge * 0.6); }
+    if (fireAge >= 0 && fireAge < 0.3) { flash.material.opacity = Math.max(flash.material.opacity, 1 - fireAge / 0.3); flash.position.set(0, 1.2, 0); flash.scale.setScalar(5 * (0.6 + fireAge)); }
+    // 咆哮
+    roarShells.forEach((m, i) => {
+      const a = roarAge - i * 0.12;
+      m.visible = roarAge >= 0 && a >= 0 && a < 0.9;
+      if (m.visible) { const s = 0.8 + a * 14; m.scale.setScalar(s); m.position.set(0, 3.1, ez + 0.6); m.material.uniforms.uAlpha.value = (1 - a / 0.9) * 0.9; m.material.uniforms.uTime.value = t; }
+    });
+    if (roarAge >= 0 && roarAge < 1) { roarRing.position.z = ez + 0.6; roarRing.scale.setScalar(0.5 + roarAge * 13); roarRingMat.opacity = 0.7 * (1 - roarAge); } else roarRingMat.opacity = 0;
+    if (roarAge >= 0 && roarAge < 0.05) shake = Math.max(shake, 0.1);
+
+    sparks.update(dt, 9); dust.update(dt, 1.2);
+
+    /* プレイヤー */
+    const st = { crouch: 0.15, lean: 0, tilt: 0, arms: 0, stride: 0 };
+    let px = 0, pz = 0, ry = 0;
+    const inputAt = view ? view.inputAt : null;
+    if (inputAt !== null && ts >= inputAt) {
+      const k = (ts - inputAt) / 1000, out = ease(k / 0.22), back = ease((k - 0.75) / 0.45);
+      px = 1.9 * out * (1 - back); ry = -Math.PI * 2 * ease(k / 0.32);
+      st.tilt = -0.45 * out * (1 - back); st.crouch = 0.15 + 0.35 * out * (1 - back); st.stride = 0.5 * out * (1 - back); st.arms = 0.4 * out * (1 - back);
+      if (k < 0.35 && (!ghostSnaps.length || ts - ghostSnaps[ghostSnaps.length - 1].ts > 45)) ghostSnaps.push({ ts, x: px, ry });
+    }
+    const out = ui && ui.impactOutcome;
+    if (view && view.impactAt !== null && ts >= view.impactAt && out && /hit|no_input/.test(out)) { const k = (ts - view.impactAt) / 1000; const s = Math.sin(Math.min(1, k / 0.35) * Math.PI); pz = 0.6 * s; st.lean = -0.4 * s; }
+    player.position.set(px, 0, pz); player.rotation.y = ry; poseHuman(player, t, st);
+    blob.position.set(px, 0.006, pz);
+    while (ghostSnaps.length && ts - ghostSnaps[0].ts > 420) ghostSnaps.shift();
+    if (inputAt === null) ghostSnaps.length = 0;
+    ghosts.forEach((g, i) => { const s = ghostSnaps[ghostSnaps.length - 1 - i]; if (!s) { g.visible = false; return; } g.visible = true; g.position.set(s.x, 0, 0); g.rotation.y = s.ry; poseHuman(g, t, st); g.userData.mat.opacity = 0.35 * (1 - (ts - s.ts) / 420); });
+    if (view && view.impactAt !== null && ts >= view.impactAt) {
+      const kk = clamp01((ts - view.impactAt) / 220);
+      hitFlash.material.color.setHex(!out ? 0xffffff : out === 'just' ? 0x6cf7ff : out === 'normal' ? 0x7dffa8 : 0xff4058);
+      hitFlash.material.opacity = (1 - kk) * 0.7; hitFlash.scale.setScalar(1.1 + 0.6 * kk);
+    } else hitFlash.material.opacity = 0;
+
+    shake *= Math.pow(0.02, dt);
+    camera.position.set(camBase.x + (Math.random() - 0.5) * shake, camBase.y + (Math.random() - 0.5) * shake, camBase.z);
+    camera.lookAt(camTarget);
+    renderer.render(scene, camera);
+  }
+  return {
+    render, resize, ok: true,
+    info: () => { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return { renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown', three: THREE.REVISION }; },
+    dispose() { renderer.dispose(); renderer.domElement.remove(); },
+  };
+}
+
+/** Three.js を固定バージョンの CDN から読み込む（失敗時は例外） */
+async function loadThree() {
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('Three.js の読み込みがタイムアウトしました（15秒）')), 15000));
+  try { return await Promise.race([import('three'), timeout]); }
+  catch (e) { throw new Error('Three.js を読み込めませんでした: ' + (e && e.message ? e.message : e)); }
+}
+
+/** WebGL を使わない簡易描画（自動テスト用。?render=none） */
+function createNullScene(container) {
+  const el = document.createElement('div'); el.className = 'null-scene'; container.appendChild(el);
+  return {
+    ok: true, resize() {}, dispose() { el.remove(); }, info: () => ({ renderer: 'none', three: null }),
+    render(view) { if (!view) { el.textContent = 'idle'; return; } el.textContent = `${view.attack} ${view.phase}`; el.dataset.phase = view.phase; },
+  };
+}
+
+/* ============================================================================
+ * App — UI・計測ループ・保存・解析画面
+ * 計測ループ（rAF）は Core.createTrialRunner の frame/input を呼ぶだけ。統計は解析画面でのみ行う。
+ * ========================================================================== */
+const APP_NAME = 'PD入力誤差測定';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (v, d = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : Number(v).toFixed(d));
+const pct = (v, d = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : (100 * v).toFixed(d) + '%');
+const params = new URLSearchParams(location.search);
+const RENDER_MODE = params.get('render') === 'none' ? 'none' : 'webgl';
+const AT = Core.ATTACKS, AL = Core.ATTACK_LABEL;
+const OUTCOME_LABEL = { just: 'ジャスト回避', normal: '通常回避', early_hit: '早すぎ被弾', late_hit: '遅すぎ被弾', no_input: '無入力', aborted: '中断' };
+const MODE_LABEL = { individual: '個別測定', mixed: '混合測定' };
+const ATTACK_INSTR = {
+  charge: '敵が向き直り、姿勢を低くして溜めた後、一直線に突進してきます。敵がぶつかる瞬間に合わせて回避してください。',
+  slam: '敵が大槌を振り上げ、溜めてから、あなたの立つ地面に叩きつけます。槌が地面に当たる瞬間に合わせて回避してください。',
+  shockwave: '遠くの敵が地面を叩き、その地点から衝撃波が地面を這って広がります。衝撃波の先端があなたに届く瞬間に合わせて回避してください。',
+  aoe: '敵が詠唱すると、あなたの足元に赤い危険範囲が表示され、一定時間後に爆発します。爆発の瞬間に合わせて回避してください（残り時間の表示はありません）。',
+  roar: '待機している敵の体が突然赤く光り、すぐに咆哮します。咆哮の瞬間に合わせて回避してください。',
+};
+const COLORS = { charge: '#5aa9ff', slam: '#ffb547', shockwave: '#ff5c8a', aoe: '#7dffa8', roar: '#c49bff', grid: 'rgba(140,170,210,0.13)', axis: '#7f93ad', text: '#c9d6e6', band: 'rgba(110,240,255,0.10)' };
+const nowAbs = () => performance.timeOrigin + performance.now();
+
+/* ------------------------------------------------------------ 設定 --- */
+const DEFAULT_SETTINGS = {
+  justWindow: 110, invincibleWindow: 350, obsAfter: 1000,
+  attacks: JSON.parse(JSON.stringify(Core.DEFAULT_ATTACK_PARAMS)),
+  mode: 'individual', attack: 'slam',
+  practice: 10, main: 100, blockSize: 25, mixedPerAttack: 50, mixedPractice: 10,
+  itiRange: [1000, 2500], feedbackMain: true, feedbackMs: 900, interTrialMs: 600,
+  inputKey: 'Space', inputDevice: 'auto', quality: 'high', effects: 'standard', sound: false, excludeFrameDrops: false,
+  bootstrapN: 500,
+};
+const clone = (o) => JSON.parse(JSON.stringify(o));
+function mergeSettings(base, over) {
+  const out = clone(base);
+  if (!over) return out;
+  for (const k of Object.keys(base)) if (over[k] !== undefined && k !== 'attacks') out[k] = over[k];
+  if (over.attacks) for (const a of AT) out.attacks[a] = { ...base.attacks[a], ...(over.attacks[a] || {}) };
+  return out;
+}
+function validateSettings(s) {
+  const e = [], pos = (v) => Number.isFinite(v) && v > 0;
+  if (!pos(s.justWindow)) e.push('ジャスト受付時間 J は正の値にしてください。');
+  if (!pos(s.invincibleWindow) || s.justWindow >= s.invincibleWindow) e.push('通常回避無敵時間 D は J より長くしてください。');
+  if (!(s.obsAfter >= 100)) e.push('接触後の入力受付は 100 ms 以上にしてください。');
+  const A = s.attacks;
+  if (!(A.charge.windupMs >= A.charge.turnMs && A.charge.runMs >= 100 && A.charge.startDistance >= 3)) e.push('突進：溜め時間は向き直り以上、走行は 100 ms 以上、開始距離は 3 以上にしてください。');
+  if (!(A.slam.raiseMs >= 50 && A.slam.holdMs >= 0 && A.slam.swingMs >= 80)) e.push('叩きつけ：振り上げ 50 ms 以上、振り下ろし 80 ms 以上にしてください。');
+  if (!(A.shockwave.windupMs >= 200 && A.shockwave.speed > 0 && A.shockwave.distance >= 3)) e.push('衝撃波：予備動作 200 ms 以上、速度は正、距離は 3 以上にしてください。');
+  if (!(A.aoe.castMs >= 100 && A.aoe.delayMs >= 100)) e.push('AoE：予備動作と表示→爆発は 100 ms 以上にしてください。');
+  if (!(A.roar.glowMs >= 100 && A.roar.glowMs <= 500)) e.push('赤発光→咆哮は 100〜500 ms にしてください。');
+  if (!(s.itiRange[0] >= 500 && s.itiRange[1] >= s.itiRange[0])) e.push('攻撃間隔（待機時間）の範囲が不正です（下限 500 ms 以上）。');
+  if (!(s.practice >= 0 && s.main >= 1 && s.mixedPerAttack >= 1 && s.mixedPractice >= 0 && s.blockSize >= 1)) e.push('試行数が不正です。');
+  if (!(s.bootstrapN >= 0 && s.bootstrapN <= 5000)) e.push('ブートストラップ回数は 0〜5000 にしてください。');
+  return e;
+}
+
+/* ------------------------------------------------------------ 保存 --- */
+const Store = (() => {
+  const P = 'jdpred.v1.';
+  const get = (k) => { try { const v = localStorage.getItem(P + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  const set = (k, v) => { try { localStorage.setItem(P + k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+  const del = (k) => { try { localStorage.removeItem(P + k); } catch (e) { /* 無視 */ } };
+  return {
+    available() { try { localStorage.setItem(P + '_t', '1'); localStorage.removeItem(P + '_t'); return true; } catch (e) { return false; } },
+    index: () => get('index') || [],
+    loadSession: (id) => get('session.' + id),
+    saveSession(s) { const idx = get('index') || []; if (!idx.includes(s.id)) { idx.push(s.id); set('index', idx); } s.updated_at = new Date().toISOString(); return set('session.' + s.id, s); },
+    deleteSession(id) { del('session.' + id); set('index', (get('index') || []).filter((x) => x !== id)); if (get('active') === id) del('active'); },
+    settings: () => get('settings2'), saveSettings: (s) => set('settings2', s),
+    active: () => get('active'), setActive: (id) => (id ? set('active', id) : del('active')),
+  };
+})();
+
+/* ---------------------------------------------------------- セッション --- */
+function newSessionId(prefix) {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  return `${prefix}${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${Math.floor(Math.random() * 46656).toString(36).padStart(3, '0')}`;
+}
+function envInfo() {
+  return {
+    userAgent: navigator.userAgent, platform: navigator.userAgentData ? navigator.userAgentData.platform : navigator.platform, language: navigator.language,
+    hardwareConcurrency: navigator.hardwareConcurrency || null, screen: { width: screen.width, height: screen.height, devicePixelRatio: window.devicePixelRatio },
+    timeOriginEpochMs: performance.timeOrigin, renderMode: RENDER_MODE, renderer: App.scene && App.scene.info ? App.scene.info() : null,
+  };
+}
+function createSession(settings, mode, attack) {
+  const id = newSessionId(mode === 'mixed' ? 'MX' : attack.slice(0, 2).toUpperCase());
+  const seed = params.get('seed') || `${id}:${Math.floor(Math.random() * 2 ** 32).toString(16)}`;
+  const plan = Core.buildPlan({ mode, attack, practice: settings.practice, main: settings.main, blockSize: settings.blockSize, mixedPerAttack: settings.mixedPerAttack, mixedPractice: settings.mixedPractice, itiRange: settings.itiRange }, seed);
+  return {
+    format: 'jdpred-session/1', app_version: Core.VERSION, id, seed, mode, attack: mode === 'individual' ? attack : null,
+    created_at: new Date().toISOString(), originPerf: performance.now(), originTimeOrigin: performance.timeOrigin,
+    settings: clone(settings), queue: plan.queue, cursor: 0, trials: [], inProgress: null,
+    device: settings.inputDevice === 'auto' ? null : settings.inputDevice, status: 'active', env: envInfo(),
+    loads: [{ at: new Date().toISOString(), timeOriginEpochMs: performance.timeOrigin }],
+  };
+}
+/** 相対時刻（セッション開始 = 0）。同じ読み込み内は performance.now() の差だけで計算する */
+function toRelFactory(s) { const K = performance.timeOrigin - s.originTimeOrigin; return (t) => (t + K) - s.originPerf; }
+
+/* --------------------------------------------------------------- 状態 --- */
+const App = {
+  scene: null, sceneError: null, session: null, runner: null, item: null, state: 'idle', stateUntil: 0,
+  impactOutcome: null, held: new Set(), idleFrames: [], lastFrameTs: null, settings: null, analysis: null, previewAttack: 'slam',
+};
+
+/* ------------------------------------------------------------ 入力 --- */
+function normalizeEventTs(ts, handlerTs) {
+  if (!Number.isFinite(ts) || ts <= 0) return null;
+  let t = ts; if (t > 1e12) t -= performance.timeOrigin;
+  if (t > handlerTs + 1 || handlerTs - t > 1000) return null;
+  return t;
+}
+const isForm = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+function onDodgeInput(device, code, evTs) {
+  const handlerTs = performance.now(), e = normalizeEventTs(evTs, handlerTs);
+  const info = { time: e !== null ? e : handlerTs, eventTs: e, handlerTs, device, code, source: e !== null ? 'event.timeStamp' : 'handler' };
+  if (App.state === 'trial' && App.runner) App.runner.input(info);
+}
+const measureActive = () => $('#tab-measure').classList.contains('active');
+let capturingKey = false;
+window.addEventListener('keydown', (e) => {
+  if (isForm(e.target) || capturingKey) return;
+  if (e.code === App.settings.inputKey && measureActive()) {
+    e.preventDefault(); if (e.repeat) return; // 長押しの自動リピートは無視
+    App.held.add('k:' + e.code); onDodgeInput('keyboard', e.code, e.timeStamp);
+  } else if (e.code === 'Escape' && measureActive()) pauseSession('user_pause');
+  else if (e.code === 'Enter' && measureActive() && (App.state === 'break' || App.state === 'paused')) { e.preventDefault(); continueSession(); }
+}, { capture: true });
+window.addEventListener('keyup', (e) => { if (e.code === App.settings.inputKey && measureActive() && !isForm(e.target)) e.preventDefault(); App.held.delete('k:' + e.code); }, { capture: true });
+function bindPointer(el) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); App.held.add('p:' + e.pointerId);
+    onDodgeInput(e.pointerType === 'mouse' ? 'mouse' : e.pointerType === 'pen' ? 'pen' : 'touch', e.pointerType === 'mouse' ? 'MouseLeft' : 'Touch', e.timeStamp);
+  });
+  const up = (e) => App.held.delete('p:' + e.pointerId);
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+window.addEventListener('blur', () => focusLost('window_blur'));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') focusLost('page_hidden'); });
+window.addEventListener('pagehide', () => focusLost('page_hidden'));
+function focusLost(reason) { App.held.clear(); if (['trial', 'wait_release', 'feedback', 'gap'].includes(App.state)) pauseSession(reason, true); }
+
+/* ---------------------------------------------------------- 計測ループ --- */
+function frameLoop(ts) {
+  requestAnimationFrame(frameLoop);
+  if (App.lastFrameTs !== null) { const d = ts - App.lastFrameTs; if (d > 0 && d < 1000) { App.idleFrames.push(d); if (App.idleFrames.length > 240) App.idleFrames.shift(); } }
+  App.lastFrameTs = ts;
+  try { stepController(ts); } catch (err) { console.error(err); showFatal('計測処理でエラー: ' + err.message); }
+  if (App.scene) {
+    try { App.scene.render(App.runner ? App.runner.view(ts) : null, ts, { impactOutcome: App.impactOutcome, previewAttack: App.previewAttack }); }
+    catch (err) { if (!App.renderErr) { App.renderErr = true; console.error(err); toast('描画エラー: ' + err.message, true); } }
+  }
+}
+function stepController(ts) {
+  const s = App.session;
+  if (App.state === 'wait_release') {
+    if (App.held.size === 0 && ts >= App.stateUntil) { App.runner.start(ts); App.state = 'trial'; setOverlay(''); }
+    else if (App.held.size) setOverlay('<div class="ov-small">キー／ボタンを離してください</div>');
+  } else if (App.state === 'trial') {
+    App.runner.frame(ts);
+    const r = App.runner.state;
+    if (r.impactFrame !== null && App.impactOutcome === null) {
+      const fi = r.firstInput;
+      App.impactOutcome = fi ? Core.classify(fi.time - r.H, s.settings.justWindow, s.settings.invincibleWindow) : 'no_input';
+      if (s.settings.sound) beep(App.impactOutcome);
+    }
+    if (r.done) finishTrial(ts, null);
+  } else if (App.state === 'feedback') {
+    if (ts >= App.stateUntil) { App.state = 'gap'; App.stateUntil = ts + s.settings.interTrialMs; }
+  } else if (App.state === 'gap') {
+    if (ts >= App.stateUntil && App.scene) beginNextTrial(ts);
+  }
+}
+function beginNextTrial(ts) {
+  const s = App.session;
+  if (s.cursor >= s.queue.length) return completeSession();
+  const item = s.queue[s.cursor], prev = s.cursor > 0 ? s.queue[s.cursor - 1] : null;
+  if (!App._ack && (!prev || prev.block_index !== item.block_index)) { App.state = 'break'; App.runner = null; showBreak(item, prev); return; }
+  App._ack = false;
+  App.item = item; App.impactOutcome = null;
+  App.runner = Core.createTrialRunner({ item, settings: s.settings, toRel: toRelFactory(s) });
+  s.inProgress = { trial_id: item.trial_id, started_at: new Date().toISOString() };
+  Store.saveSession(s);
+  App.state = 'wait_release'; App.stateUntil = ts;
+  updateHud(true);
+}
+function finishTrial(ts, abortReason) {
+  const s = App.session, item = App.item, runner = App.runner;
+  if (!runner || !item) return;
+  if (abortReason) runner.abort(abortReason, ts);
+  const fi = runner.state.firstInput;
+  let deviceMismatch = false;
+  if (fi) { if (!s.device) s.device = fi.device; if (fi.device !== s.device) deviceMismatch = true; }
+  const fb = item.is_practice || s.settings.feedbackMain;
+  const res = runner.result({
+    deviceMismatch, mode: s.mode,
+    fields: {
+      session_id: s.id, timestamp_utc: new Date(performance.timeOrigin + (runner.state.S ?? performance.now())).toISOString(),
+      focus_lost: !!abortReason && abortReason !== 'user_pause' && abortReason !== 'user_end', feedback_enabled: fb, random_seed: s.seed,
+      retry_of: item.retry_of || null, timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE,
+      clock_note: 'ms relative to session start (performance.timeOrigin + performance.now())',
+    },
+  });
+  s.trials.push(res); s.inProgress = null;
+  if (res.status === 'aborted') requeue(item); else s.cursor += 1;
+  if (!Store.saveSession(s)) toast('保存に失敗しました（ブラウザの保存領域）。データを書き出してください。', true);
+  App.runner = abortReason ? null : runner;
+  showLastResult(res, fb);
+  if (!abortReason) { App.state = 'feedback'; App.stateUntil = ts + (fb ? s.settings.feedbackMs : 250); }
+  updateHud(true);
+}
+function requeue(item) {
+  const s = App.session, n = (item.retry_count || 0) + 1;
+  const copy = { ...item, trial_id: item.trial_id.replace(/~r\d+$/, '') + '~r' + n, retry_of: item.trial_id, retry_count: n };
+  let pos = s.cursor + 1;
+  while (pos < s.queue.length && s.queue[pos].block_index === item.block_index) pos++;
+  s.queue.splice(pos, 0, copy); s.cursor += 1;
+}
+function pauseSession(reason, auto) {
+  if (!App.session) return;
+  if (App.state === 'trial' && App.runner) finishTrial(performance.now(), reason);
+  else if (App.state === 'wait_release') { App.session.inProgress = null; Store.saveSession(App.session); }
+  if (['trial', 'wait_release', 'feedback', 'gap', 'break'].includes(App.state)) {
+    App.state = 'paused'; App.runner = null;
+    setOverlay(`<div class="ov-title">${auto ? '中断しました' : '休憩中'}</div><div class="ov-small">${auto ? 'ページが非アクティブになったため、進行中の試行を<b>中断（無効）</b>として記録しました。同じ攻撃の試行を後で再実施します。' : '進行中の試行は中断として記録しました。'}</div><button class="btn primary" data-act="continue">再開（Enter）</button>`);
+  }
+  refreshButtons();
+}
+function continueSession() {
+  if (!App.session || App.session.status !== 'active' || !(App.state === 'break' || App.state === 'paused')) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  App._ack = App.state === 'break';
+  setOverlay('<div class="ov-title">準備…</div>');
+  App.state = 'gap'; App.stateUntil = performance.now() + 900;
+  refreshButtons();
+}
+function completeSession() {
+  const s = App.session; s.status = 'complete'; Store.saveSession(s);
+  App.state = 'complete'; App.runner = null;
+  setOverlay(`<div class="ov-title">測定が完了しました</div><div class="ov-small">${s.trials.length} 試行を保存しました。「統計」で解析できます。</div><button class="btn primary" data-act="goto-stats">統計を開く</button>`);
+  refreshButtons();
+}
+async function endSession() {
+  if (!App.session) return;
+  if (App.state === 'trial') pauseSession('user_end');
+  if (!(await askConfirm('測定を終了します。データは保存され、データ管理から再開できます。', '終了する'))) return;
+  App.session.inProgress = null; Store.saveSession(App.session);
+  App.state = 'idle'; App.runner = null; Store.setActive(null); App.session = null;
+  setOverlay('<div class="ov-title">測定を終了しました</div><div class="ov-small">データ管理から再開できます。</div>');
+  refreshButtons(); updateHud(true);
+}
+async function startNewSession() {
+  const mode = $('#m-mode').value, attack = $('#m-attack').value;
+  const errs = validateSettings(App.settings);
+  if (errs.length) { toast('設定に問題があります：' + errs.join(' '), true); switchTab('settings'); return; }
+  if (!App.scene) { toast('3D 描画を初期化できていないため測定を開始できません。' + (App.sceneError || ''), true); return; }
+  if (App.session && App.session.status === 'active') {
+    if (App.state === 'trial') pauseSession('user_end');
+    if (!(await askConfirm('進行中のセッションを保存したまま、新しいセッションを開始しますか？', '新規開始'))) return;
+  }
+  const s = createSession(App.settings, mode, attack);
+  App.session = s; Store.saveSession(s); Store.setActive(s.id);
+  App.state = 'gap'; App.stateUntil = performance.now(); App._ack = false;
+  applyScene(s.settings); refreshButtons(); updateHud(true);
+}
+function resumeSession(id) {
+  const s = Store.loadSession(id);
+  if (!s) { toast('セッションを読み込めません。', true); return; }
+  if (App.session && App.session.id !== id && App.state === 'trial') finishTrial(performance.now(), 'user_end');
+  App.session = s;
+  if (s.inProgress) {
+    const item = s.queue[s.cursor];
+    if (item && item.trial_id === s.inProgress.trial_id) {
+      s.trials.push({ session_id: s.id, trial_id: item.trial_id, attack_type: item.attack, measurement_mode: s.mode, block_index: item.block_index, trial_index: item.index_in_attack,
+        is_practice: item.is_practice, valid_for_fit: false, invalid_reason: 'page_reload', status: 'aborted', outcome: 'aborted', is_censored: false, focus_lost: true,
+        timestamp_utc: s.inProgress.started_at, random_seed: s.seed, retry_of: item.retry_of || null, foreperiod_ms: item.foreperiod_ms,
+        just_window_ms: s.settings.justWindow, invincible_window_ms: s.settings.invincibleWindow, attack_parameter_json: JSON.stringify(s.settings.attacks[item.attack]),
+        timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE, clock_note: 'incomplete trial interrupted by page reload' });
+      requeue(item);
+    }
+    s.inProgress = null;
+  }
+  (s.loads = s.loads || []).push({ at: new Date().toISOString(), timeOriginEpochMs: performance.timeOrigin });
+  Store.saveSession(s); Store.setActive(s.id); applyScene(s.settings);
+  if (s.cursor >= s.queue.length) completeSession();
+  else { s.status = 'active'; App.state = 'break'; showBreak(s.queue[s.cursor], null, true); }
+  refreshButtons(); updateHud(true);
+}
+
+let audioCtx = null;
+function beep(o) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.frequency.value = o === 'just' ? 1320 : o === 'normal' ? 880 : 220;
+    g.gain.setValueAtTime(0.08, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
+    osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.26);
+  } catch (e) { /* 無視 */ }
+}
+
+/* ---------------------------------------------------------------- HUD --- */
+function setOverlay(html) { const el = $('#overlay'); el.innerHTML = html; el.hidden = !html; }
+function showBreak(item, prev, resumed) {
+  const s = App.session, blocks = Math.max(...s.queue.map((q) => q.block_index));
+  const head = resumed ? '再開' : item.block_index === 0 ? '練習' : (prev && prev.block_index === 0 ? '本測定を開始' : '休憩');
+  const blk = item.block_index === 0 ? '練習（推定には使いません）' : `本測定 ブロック ${item.block_index} / ${blocks}`;
+  const what = s.mode === 'individual' ? `<div class="ov-text">${ATTACK_INSTR[s.attack]}</div>` :
+    `<div class="ov-text">5 種類の攻撃がランダムな順序で来ます。どの攻撃も、当たる瞬間に合わせて回避してください。</div><ul class="ov-list">${AT.map((a) => `<li><b>${AL[a]}</b>：${ATTACK_INSTR[a]}</li>`).join('')}</ul>`;
+  const key = App.settings.inputKey === 'Space' ? 'スペースキー' : App.settings.inputKey;
+  setOverlay(`<div class="ov-title">${esc(head)}</div><div class="ov-cond">${esc(MODE_LABEL[s.mode])}${s.mode === 'individual' ? '：' + AL[s.attack] : ''} — ${esc(blk)}</div>${what}
+    <div class="ov-small">回避：${esc(key)} ／ マウス左クリック ／ 画面タップ（最初の 1 回だけ有効）。Esc で休憩。</div>
+    <button class="btn primary" data-act="continue">開始（Enter）</button>`);
+  refreshButtons();
+}
+function showLastResult(r, fb) {
+  const el = $('#hud-result');
+  if (r.status === 'aborted') { el.innerHTML = `<span class="tag bad">中断</span> ${esc(r.invalid_reason)}`; return; }
+  if (!fb) { el.innerHTML = '<span class="tag">記録しました</span>'; return; }
+  const cls = { just: 'just', normal: 'ok', early_hit: 'bad', late_hit: 'bad', no_input: 'muted' }[r.outcome] || '';
+  el.innerHTML = `<span class="tag">${esc(AL[r.attack_type])}</span> <span class="tag ${cls}">${esc(OUTCOME_LABEL[r.outcome])}</span> ${r.input_error_ms !== null ? `誤差 ${r.input_error_ms >= 0 ? '+' : ''}${r.input_error_ms.toFixed(1)} ms` : ''}${r.is_practice ? ' <span class="tag">練習</span>' : ''}`;
+  if (App.state !== 'paused') { const big = { just: 'JUST', normal: 'DODGE', early_hit: 'EARLY', late_hit: 'HIT', no_input: 'MISS' }[r.outcome] || ''; const f = $('#hud-flash'); f.textContent = big; f.className = 'hud-flash show ' + cls; clearTimeout(showLastResult._t); showLastResult._t = setTimeout(() => (f.className = 'hud-flash'), 650); }
+}
+function updateHud(force) {
+  const s = App.session, top = $('#hud-top');
+  if (!s) { top.innerHTML = '<span class="muted">セッション未開始</span>'; $('#side-session').innerHTML = '<p class="muted">測定モードと攻撃を選んで「測定を開始」を押してください。</p>'; return; }
+  if (!force && performance.now() - (updateHud._l || 0) < 250) return;
+  updateHud._l = performance.now();
+  const item = s.queue[Math.min(s.cursor, s.queue.length - 1)];
+  const planned = s.queue.length - s.queue.filter((q) => q.retry_of).length, done = s.trials.filter((t) => t.status === 'completed').length;
+  const blocks = Math.max(...s.queue.map((q) => q.block_index));
+  top.innerHTML = `<span class="cond-badge" style="background:${COLORS[item.attack]}">${esc(AL[item.attack])}</span><span>${esc(MODE_LABEL[s.mode])}</span>
+    <span>${item.block_index === 0 ? '練習' : `ブロック ${item.block_index}/${blocks}`}</span><span>試行 ${Math.min(done + 1, planned)}/${planned}</span>
+    <span class="prog"><i style="width:${(100 * done / planned).toFixed(1)}%"></i></span>`;
+  // 攻撃ごとの成功率（本測定・完了試行）
+  const rows = AT.filter((a) => s.trials.some((t) => t.attack_type === a)).map((a) => {
+    const ts = s.trials.filter((t) => t.attack_type === a && t.status === 'completed' && !t.is_practice);
+    const j = ts.filter((t) => t.outcome === 'just').length, nn = ts.filter((t) => t.outcome === 'normal').length;
+    return `<tr><td>${AL[a]}</td><td>${ts.length}</td><td>${ts.length ? pct(j / ts.length, 0) : '—'}</td><td>${ts.length ? pct((ts.length - j - nn) / ts.length, 0) : '—'}</td></tr>`;
+  }).join('');
+  const fs = Core.frameStats(App.idleFrames);
+  $('#side-session').innerHTML = `<dl class="kv"><dt>セッション</dt><dd class="mono">${esc(s.id)}</dd><dt>モード</dt><dd>${esc(MODE_LABEL[s.mode])}${s.attack ? '（' + AL[s.attack] + '）' : ''}</dd>
+    <dt>入力デバイス</dt><dd>${esc(s.device || '最初の入力で決定')}</dd><dt>J / D</dt><dd>${s.settings.justWindow} / ${s.settings.invincibleWindow} ms</dd>
+    <dt>描画</dt><dd>${fs.fps ? fs.fps.toFixed(0) + ' fps' : '—'}</dd><dt>中断</dt><dd>${s.trials.filter((t) => t.status === 'aborted').length}</dd></dl>
+    ${rows ? `<table class="tbl small"><tr><th>攻撃</th><th>本測定</th><th>Just</th><th>被弾等</th></tr>${rows}</table>` : ''}`;
+}
+function refreshButtons() {
+  const s = App.session;
+  $('#btn-continue').disabled = !(s && (App.state === 'break' || App.state === 'paused'));
+  $('#btn-pause').disabled = !(s && ['trial', 'wait_release', 'feedback', 'gap'].includes(App.state));
+  $('#btn-end').disabled = !s;
+}
+function toast(msg, bad) { const el = document.createElement('div'); el.className = 'toast' + (bad ? ' bad' : ''); el.textContent = msg; $('#toasts').appendChild(el); setTimeout(() => el.remove(), bad ? 8000 : 3500); }
+function showFatal(msg) { const el = $('#fatal'); el.hidden = false; el.textContent = msg; }
+function askConfirm(msg, okLabel = 'OK', danger = false) {
+  return new Promise((resolve) => {
+    const d = $('#confirm'); $('#confirm-msg').textContent = msg;
+    const ok = $('#confirm-ok'); ok.textContent = okLabel; ok.className = 'btn ' + (danger ? 'danger' : 'primary');
+    d.hidden = false; ok.focus();
+    const done = (v) => { d.hidden = true; ok.onclick = null; $('#confirm-cancel').onclick = null; resolve(v); };
+    ok.onclick = () => done(true); $('#confirm-cancel').onclick = () => done(false);
+  });
+}
+
+/* ------------------------------------------------------------- 3D 初期化 --- */
+let sceneKey = '';
+async function initScene() {
+  const stage = $('#stage-gl');
+  if (App.scene) { App.scene.dispose(); App.scene = null; }
+  const s = (App.session && App.session.settings) || App.settings;
+  if (RENDER_MODE === 'none') { App.scene = createNullScene(stage); $('#scene-status').textContent = '簡易描画（テスト用 ?render=none）'; return; }
+  const c = document.createElement('canvas');
+  if (!(c.getContext('webgl2') || c.getContext('webgl'))) { App.sceneError = 'この環境では WebGL を利用できません。ハードウェアアクセラレーションを有効にするか、別のブラウザを使用してください。'; showFatal(App.sceneError); return; }
+  $('#scene-status').textContent = 'Three.js を読み込み中…';
+  try {
+    App.scene = await createScene3D(stage, { quality: s.quality, effects: s.effects });
+    const info = App.scene.info(); $('#scene-status').textContent = `Three.js r${info.three} ／ ${info.renderer}`; App.sceneError = null;
+  } catch (err) { App.sceneError = err.message; showFatal(err.message + '（ネットワーク接続と CDN へのアクセスを確認してください）'); $('#scene-status').textContent = '3D 初期化失敗'; }
+}
+function applyScene(s) { const k = JSON.stringify([s.quality, s.effects]); if (k !== sceneKey) { sceneKey = k; initScene(); } }
+
+/* --------------------------------------------------------------- タブ --- */
+function switchTab(name) {
+  if (App.state === 'trial' && name !== 'measure') pauseSession('tab_switch', true);
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.tabpanel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'measure' && App.scene) setTimeout(() => App.scene.resize(), 0);
+  if (name === 'stats') renderStatsControls();
+  if (name === 'data') renderDataPanel();
+  if (name === 'settings') renderSettings();
+}
+
+/* ------------------------------------------------------------- 設定画面 --- */
+const FIELDS = [
+  { sec: '判定（測定後の成功率評価に使う設定値）' },
+  { k: 'justWindow', label: 'ジャスト受付時間 J（ms）', type: 'num', step: 0.5, presets: [110, 176, 181.5, 187], help: '測定値ではなく、成功率の計算に使う仮定値です。' },
+  { k: 'invincibleWindow', label: '通常回避無敵時間 D（ms）', type: 'num', help: '仮設定。' },
+  { k: 'obsAfter', label: '接触後の入力受付（ms）', type: 'num', help: '遅すぎる入力も測るため、接触後もこの時間まで受け付けます。' },
+  { sec: '試行数' },
+  { k: 'practice', label: '個別測定：練習', type: 'num' }, { k: 'main', label: '個別測定：本測定', type: 'num' },
+  { k: 'mixedPractice', label: '混合測定：練習（合計）', type: 'num' }, { k: 'mixedPerAttack', label: '混合測定：本測定（各攻撃）', type: 'num' },
+  { k: 'blockSize', label: 'ブロックの試行数（休憩の間隔）', type: 'num' },
+  { k: 'itiRange', label: '攻撃間隔：次の攻撃の予兆までの待機（ms、ランダム）', type: 'range', help: '一定周期だと画面を見ずに回避できてしまうため、ランダムにします。' },
+  { sec: '突進' },
+  { k: 'attacks.charge.turnMs', label: '向き直り（ms）', type: 'num' }, { k: 'attacks.charge.windupMs', label: '予兆開始 → 走り出し（向き直り＋溜め, ms）', type: 'num' },
+  { k: 'attacks.charge.runMs', label: '走り出し → 接触（ms）', type: 'num' }, { k: 'attacks.charge.startDistance', label: '突進開始距離（シーン単位）', type: 'num', step: 0.5 },
+  { sec: '叩きつけ' },
+  { k: 'attacks.slam.raiseMs', label: '振り上げ（ms）', type: 'num' }, { k: 'attacks.slam.holdMs', label: '溜め（ms）', type: 'num' }, { k: 'attacks.slam.swingMs', label: '振り下ろし → 地面に接触（ms）', type: 'num' },
+  { sec: '衝撃波' },
+  { k: 'attacks.shockwave.windupMs', label: '予備動作 → 発生（ms）', type: 'num' }, { k: 'attacks.shockwave.speed', label: '衝撃波の速度 v（単位/秒）', type: 'num', step: 0.5 },
+  { k: 'attacks.shockwave.distance', label: '発生源からの距離 d（シーン単位）', type: 'num', step: 0.5, help: '発生から到達まで d/v 秒。' },
+  { sec: 'AoE 起爆' },
+  { k: 'attacks.aoe.castMs', label: '予備動作 → AoE 表示（ms）', type: 'num' }, { k: 'attacks.aoe.delayMs', label: 'AoE 表示 → 爆発（ms）', type: 'num', help: '既定 1500 ms。表示中の数値カウントダウンや縮小演出はありません。' },
+  { sec: '赤発光 → 咆哮' },
+  { k: 'attacks.roar.glowMs', label: '赤発光 → 咆哮（ms、100〜500）', type: 'num' },
+  { sec: '表示・入力' },
+  { k: 'feedbackMain', label: '本測定での結果表示', type: 'select', options: [[true, '短く表示する'], [false, '表示しない']], help: '練習では常に表示。設定は試行ごとに記録されます。' },
+  { k: 'feedbackMs', label: '結果表示の時間（ms）', type: 'num' }, { k: 'interTrialMs', label: '試行間の空白（ms）', type: 'num' },
+  { k: 'inputKey', label: '回避キー', type: 'key' },
+  { k: 'inputDevice', label: '入力デバイス', type: 'select', options: [['auto', '最初の入力で決定'], ['keyboard', 'キーボード'], ['mouse', 'マウス'], ['touch', 'タッチ']], help: '異なるデバイスの入力は記録しますが推定から除外します。' },
+  { k: 'quality', label: '3D 画質', type: 'select', options: [['high', '高'], ['medium', '中'], ['low', '低（影なし）']] },
+  { k: 'effects', label: 'エフェクト表示量', type: 'select', options: [['high', '多い'], ['standard', '標準'], ['low', '少ない']] },
+  { k: 'sound', label: '効果音（接触後のみ）', type: 'bool' },
+  { sec: '解析' },
+  { k: 'excludeFrameDrops', label: '大きなフレーム落ちの試行を推定から除外', type: 'bool', help: '既定では警告のみ（除外しない）。' },
+  { k: 'bootstrapN', label: 'ブートストラップ反復回数', type: 'num', help: '既定 500。' },
+];
+const getK = (o, k) => k.split('.').reduce((x, p) => x[p], o);
+const setK = (o, k, v) => { const ps = k.split('.'); const last = ps.pop(); ps.reduce((x, p) => x[p], o)[last] = v; };
+function renderSettings() {
+  const s = App.settings, locked = !!(App.session && App.session.status === 'active');
+  const leads = AT.map((a) => `${AL[a]} ${Core.attackTiming(a, s.attacks[a]).lead.toFixed(0)} ms`).join('、');
+  $('#settings-form').innerHTML = (locked ? '<p class="note warn">進行中のセッションには開始時の設定が使われます。変更は次の新規セッションから有効です。</p>' : '') +
+    `<p class="muted">予兆の開始から接触までの時間（各攻撃で一定）：${esc(leads)}。タイミング設定が異なる試行は、標準では別のデータとして扱います。</p>` +
+    FIELDS.map((f) => {
+      if (f.sec) return `<h3>${esc(f.sec)}</h3>`;
+      const v = getK(s, f.k); let inp = '';
+      if (f.type === 'num') inp = `<input type="number" id="set-${f.k.replace(/\./g, '-')}" data-k="${f.k}" value="${v}" step="${f.step || 1}">` + (f.presets ? `<span class="presets">${f.presets.map((p) => `<button class="chip" data-preset="${f.k}" data-v="${p}">${p}</button>`).join('')}</span>` : '');
+      else if (f.type === 'range') inp = `<input type="number" data-k="${f.k}" data-i="0" value="${v[0]}"> 〜 <input type="number" data-k="${f.k}" data-i="1" value="${v[1]}">`;
+      else if (f.type === 'select') inp = `<select data-k="${f.k}">${f.options.map(([ov, ol]) => `<option value="${ov}" ${String(ov) === String(v) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`;
+      else if (f.type === 'bool') inp = `<label class="sw"><input type="checkbox" data-k="${f.k}" ${v ? 'checked' : ''}><span></span></label>`;
+      else if (f.type === 'key') inp = `<input type="text" readonly data-k="${f.k}" value="${esc(v)}" class="keycap"> <span class="muted">（クリックして押したいキーを入力）</span>`;
+      return `<div class="field"><label>${esc(f.label)}</label><div class="ctl">${inp}</div>${f.help ? `<div class="help">${esc(f.help)}</div>` : ''}</div>`;
+    }).join('') + '<div class="row"><button class="btn" data-act="settings-reset">既定値に戻す</button></div><div id="settings-errors"></div>';
+  const e = validateSettings(s); $('#settings-errors').innerHTML = e.length ? `<div class="note bad">${e.map(esc).join('<br>')}</div>` : '<div class="note ok">設定は有効です。</div>';
+}
+function readSetting(el) {
+  const k = el.dataset.k, s = App.settings;
+  if (el.dataset.i !== undefined) getK(s, k)[+el.dataset.i] = +el.value;
+  else if (el.type === 'checkbox') setK(s, k, el.checked);
+  else if (el.tagName === 'SELECT') setK(s, k, el.value === 'true' ? true : el.value === 'false' ? false : el.value);
+  else if (el.type === 'number') setK(s, k, +el.value);
+  Store.saveSettings(s); renderSettings(); if (!App.session) applyScene(s);
+}
+
+/* =========================================================== 解析 ===== */
+const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+function ciOf(arr) { const a = arr.filter(Number.isFinite).sort((x, y) => x - y); return a.length >= 20 ? [Core.quantileSorted(a, 0.025), Core.quantileSorted(a, 0.975)] : null; }
+function wilson(k, n) { if (!n) return [NaN, NaN]; const z = 1.96, p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)); return [(c - h) / d, (c + h) / d]; }
+/** 選択したセッションの試行を、攻撃×測定モード×タイミング設定のグループに分ける（自動では統合しない） */
+function groupTrials(sessions) {
+  const groups = {};
+  for (const s of sessions) for (const t of s.trials) {
+    if (!t.attack_type) continue;
+    const key = `${t.attack_type}|${t.measurement_mode}|${t.timing_key}`;
+    (groups[key] = groups[key] || { key, attack: t.attack_type, mode: t.measurement_mode, timingKey: t.timing_key, params: t.attack_parameter_json, sessions: new Set(), trials: [] }).trials.push(t);
+    groups[key].sessions.add(s.id);
+  }
+  return Object.values(groups).map((g) => ({ ...g, sessions: [...g.sessions], nMain: g.trials.filter((t) => t.valid_for_fit).length }));
+}
+async function analyzeGroup(g, opts, rng, progress) {
+  const rows = Core.rowsFor(g.trials, g.attack);
+  const all = g.trials;
+  const fit = Core.fitNormalAttack(rows);
+  const out = { key: g.key, attack: g.attack, mode: g.mode, timingKey: g.timingKey, params: g.params, sessions: g.sessions, fit, rows,
+    counts: {
+      valid: rows.length, observed: fit.nObs, censored: fit.nCens,
+      practice: all.filter((t) => t.is_practice && t.status === 'completed').length,
+      aborted: all.filter((t) => t.status === 'aborted').length,
+      excluded: all.filter((t) => t.status === 'completed' && !t.is_practice && !t.valid_for_fit).length,
+      preWarning: all.filter((t) => t.valid_for_fit && t.pre_warning_input).length,
+      frameDrop: all.filter((t) => t.frame_drop_warning).length,
+    },
+    exclusionReasons: {}, devices: {} };
+  for (const t of all) { if (t.input_device) out.devices[t.input_device] = (out.devices[t.input_device] || 0) + 1; if (!t.valid_for_fit) for (const r of (t.invalid_reason || '').split('|').filter(Boolean)) out.exclusionReasons[r] = (out.exclusionReasons[r] || 0) + 1; }
+  if (!fit.mle.ok) return out;
+  // ブートストラップ（試行単位）
+  const NB = Math.max(0, Math.round(opts.bootstrapN)), bs = [];
+  for (let k = 0; k < NB; k++) {
+    const rs = rows.map(() => rows[rng.int(rows.length)]);
+    const f = Core.fitPredictive(rs); const o = rs.filter((r) => r.e !== null).map((r) => r.e);
+    if (f.ok) bs.push({ mu: f.mu, sigma: f.sigma, smu: Core.mean(o), ssd: Math.sqrt(o.reduce((a, v) => a + (v - Core.mean(o)) ** 2, 0) / o.length), just: rs.filter((r) => r.e !== null && r.e >= -opts.J && r.e <= 0).length / rs.length });
+    if (k % 25 === 0) { progress(`${AL[g.attack]}：ブートストラップ ${k}/${NB}`); await yieldUI(); }
+  }
+  out.boot = bs;
+  out.ci = { mu: ciOf(bs.map((b) => b.mu)), sigma: ciOf(bs.map((b) => b.sigma)), smu: ciOf(bs.map((b) => b.smu)), ssd: ciOf(bs.map((b) => b.ssd)), nBoot: bs.length };
+  // 正規性：推定込みのパラメトリック・ブートストラップ（Lilliefors 型）
+  const NG = Math.min(NB, 300);
+  if (NG > 0 && fit.mle.gof) {
+    let ge = 0, ga = 0, n = 0;
+    for (let k = 0; k < NG; k++) {
+      const f = Core.fitPredictive(Core.simulatePredRows(rows, fit.mle.mu, fit.mle.sigma, rng));
+      if (f.ok && f.gof) { n++; if (f.gof.ks >= fit.mle.gof.ks) ge++; if (f.gof.ad >= fit.mle.gof.ad) ga++; }
+      if (k % 30 === 0) { progress(`${AL[g.attack]}：正規性の検定 ${k}/${NG}`); await yieldUI(); }
+    }
+    fit.mle.gof.pKS = (ge + 1) / (n + 1); fit.mle.gof.pAD = (ga + 1) / (n + 1); fit.mle.gof.nSim = n;
+  }
+  const d = fit.descriptive, w = [];
+  if (fit.mle.gof && fit.mle.gof.pAD !== undefined && fit.mle.gof.pAD < 0.05) w.push(`正規分布の当てはまりが悪い可能性があります（Anderson–Darling p = ${fit.mle.gof.pAD.toFixed(3)}）。μ・σ と成功率の予測は近似として扱ってください。`);
+  if (d && Math.abs(d.skewness) > 1) w.push(`歪度 ${d.skewness.toFixed(2)}：分布が大きく偏っています。`);
+  if (d && d.outliers.fraction > 0.05) w.push(`外れ値（四分位範囲の 1.5 倍の外）が ${(100 * d.outliers.fraction).toFixed(1)}% あります。データは削除していません。`);
+  if (out.counts.valid < 30) w.push(`有効試行数 ${out.counts.valid} は少なく、推定の不確実性が大きくなります。`);
+  if (fit.nCens / Math.max(1, fit.n) > 0.1) w.push(`無入力（右打ち切り）が ${(100 * fit.nCens / fit.n).toFixed(0)}% あります。単純推定と最尤推定の差に注意してください。`);
+  out.trend = Core.trendCheck(rows.filter((r) => r.e !== null).map((r) => r.e));
+  if (out.trend.flagged) w.push('試行順に沿った傾向または系列相関があります。試行の独立性を仮定したブートストラップの信頼区間は狭すぎる可能性があります。');
+  out.warnings = [...(fit.mle.warnings || []), ...w];
+  return out;
+}
+async function runAnalysis(sessions, opts, progress) {
+  const rng = Core.makeRng('analysis:' + sessions.map((s) => s.seed).join('|'));
+  const groups = groupTrials(sessions);
+  const res = { analyzed_at: new Date().toISOString(), sessionIds: sessions.map((s) => s.id), options: { ...opts }, groups: [] };
+  for (const g of groups) if (g.nMain > 0 || g.trials.some((t) => t.status === 'completed')) res.groups.push(await analyzeGroup(g, opts, rng, progress));
+  // 攻撃ごとの既定グループ（有効試行が最も多いもの）
+  res.defaultGroup = {};
+  for (const a of AT) { const gs = res.groups.filter((g) => g.attack === a).sort((x, y) => y.counts.valid - x.counts.valid); if (gs.length) res.defaultGroup[a] = gs[0].key; }
+  return res;
+}
+
+/* ------------------------------------------------------------- グラフ --- */
+function drawChart(canvas, spec) {
+  const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth || 600, H = canvas.clientHeight || 260;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const g = canvas.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const m = { l: 58, r: 14, t: spec.legend ? 26 : 12, b: 38 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  let [x0, x1] = spec.x, [y0, y1] = spec.y || [0, 1];
+  if (!spec.y) { let mx = 0; for (const s of spec.series) { if (s.type === 'bars') s.bins.forEach((b) => (mx = Math.max(mx, b.y))); else if (s.pts) s.pts.forEach((p) => { if (p[0] >= x0 && p[0] <= x1 && Number.isFinite(p[1])) mx = Math.max(mx, p[1]); }); } y0 = 0; y1 = mx > 0 ? mx * 1.1 : 1; }
+  const X = (x) => m.l + (x - x0) / (x1 - x0) * pw, Y = (y) => m.t + ph - (y - y0) / (y1 - y0) * ph;
+  g.font = '11px system-ui, sans-serif'; g.fillStyle = COLORS.text; g.strokeStyle = COLORS.grid; g.lineWidth = 1;
+  const nice = (lo, hi, n) => { const span = hi - lo, st0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(st0))); const st = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => span / k <= n) || 10 * mag; const o = []; for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) o.push(+v.toFixed(10)); return o; };
+  for (const v of nice(x0, x1, 8)) { g.beginPath(); g.moveTo(X(v), m.t); g.lineTo(X(v), m.t + ph); g.stroke(); g.textAlign = 'center'; g.fillText(spec.xFmt ? spec.xFmt(v) : String(v), X(v), m.t + ph + 14); }
+  for (const v of nice(y0, y1, 5)) { g.beginPath(); g.moveTo(m.l, Y(v)); g.lineTo(m.l + pw, Y(v)); g.stroke(); g.textAlign = 'right'; g.fillText(spec.yFmt ? spec.yFmt(v) : String(+v.toPrecision(3)), m.l - 6, Y(v) + 4); }
+  g.save(); g.beginPath(); g.rect(m.l, m.t, pw, ph); g.clip();
+  for (const b of spec.bands || []) { g.fillStyle = b.fill; g.fillRect(X(Math.max(x0, b.x0)), m.t, X(Math.min(x1, b.x1)) - X(Math.max(x0, b.x0)), ph); if (b.label) { g.fillStyle = 'rgba(170,240,255,0.7)'; g.textAlign = 'left'; g.fillText(b.label, X(Math.max(x0, b.x0)) + 4, m.t + 12); } }
+  for (const s of spec.series) {
+    g.strokeStyle = s.color; g.fillStyle = s.color; g.lineWidth = s.width || 1.8; g.setLineDash(s.dash || []);
+    if (s.type === 'bars') { g.globalAlpha = s.alpha ?? 0.45; for (const b of s.bins) g.fillRect(X(b.x0) + 0.5, Y(b.y), Math.max(1, X(b.x1) - X(b.x0) - 1), Y(0) - Y(b.y)); g.globalAlpha = 1; }
+    else if (s.type === 'line' || s.type === 'step') { g.beginPath(); let st = false, py = null; for (const p of s.pts) { if (!Number.isFinite(p[1])) { st = false; continue; } const xx = X(p[0]), yy = Y(p[1]); if (!st) { g.moveTo(xx, yy); st = true; } else if (s.type === 'step') { g.lineTo(xx, py); g.lineTo(xx, yy); } else g.lineTo(xx, yy); py = yy; } g.stroke(); }
+    else if (s.type === 'points') { g.globalAlpha = s.alpha ?? 0.8; for (const p of s.pts) if (Number.isFinite(p[1])) { g.beginPath(); g.arc(X(p[0]), Y(p[1]), s.r || 2.4, 0, 7); g.fill(); } g.globalAlpha = 1; }
+  }
+  g.setLineDash([]);
+  for (const v of spec.vlines || []) { g.strokeStyle = v.color || COLORS.axis; g.setLineDash(v.dash || [4, 4]); g.beginPath(); g.moveTo(X(v.x), m.t); g.lineTo(X(v.x), m.t + ph); g.stroke(); g.setLineDash([]); if (v.label) { g.fillStyle = v.color; g.textAlign = 'left'; g.fillText(v.label, X(v.x) + 3, m.t + ph - 6); } }
+  g.restore();
+  g.strokeStyle = COLORS.axis; g.strokeRect(m.l, m.t, pw, ph);
+  g.fillStyle = COLORS.text; g.textAlign = 'center'; g.fillText(spec.xLabel || '', m.l + pw / 2, H - 6);
+  g.save(); g.translate(13, m.t + ph / 2); g.rotate(-Math.PI / 2); g.fillText(spec.yLabel || '', 0, 0); g.restore();
+  if (spec.legend) { let lx = m.l + 4; g.textAlign = 'left'; for (const l of spec.legend) { g.strokeStyle = l.color; g.setLineDash(l.dash || []); g.lineWidth = 2; g.beginPath(); g.moveTo(lx, 12); g.lineTo(lx + 16, 12); g.stroke(); g.setLineDash([]); g.fillStyle = COLORS.text; g.fillText(l.label, lx + 20, 16); lx += 28 + g.measureText(l.label).width; } }
+}
+function histBins(values, lo, hi, w, density) {
+  const n = Math.max(1, Math.ceil((hi - lo) / w)), bins = [...Array(n)].map((_, i) => ({ x0: lo + i * w, x1: lo + (i + 1) * w, y: 0 }));
+  for (const v of values) if (v !== null && v >= lo && v < hi) bins[Math.floor((v - lo) / w)].y++;
+  if (density) { const N = values.length || 1; bins.forEach((b) => (b.y /= N * w)); }
+  return bins;
+}
+function ecdfPts(values) { const ext = values.map((v) => (v === null ? Infinity : v)).sort((a, b) => a - b), n = ext.length, pts = []; ext.forEach((v, i) => { if (Number.isFinite(v)) pts.push([v, (i + 1) / n]); }); return pts; }
+
+/* ---------------------------------------------------------- 統計画面 --- */
+const ciTxt = (ci, d = 1, f = fmt) => (ci ? `[${f(ci[0], d)}, ${f(ci[1], d)}]` : '—');
+const pTxt = (p) => (p === undefined || p === null || !Number.isFinite(p) ? '—' : p < 0.001 ? '< 0.001' : p.toFixed(3));
+const warnList = (ws) => (ws && ws.length ? `<ul class="warns">${ws.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : '');
+function renderStatsControls() {
+  const ids = Store.index().slice().reverse();
+  const checked = new Set(App.statsSel && App.statsSel.length ? App.statsSel : [(App.session && App.session.id) || Store.active() || ids[0]].filter(Boolean));
+  $('#st-sessions').innerHTML = ids.length ? ids.map((id) => { const s = Store.loadSession(id); if (!s) return ''; const m = s.trials.filter((t) => t.status === 'completed' && !t.is_practice).length;
+    return `<label class="sess"><input type="checkbox" value="${esc(id)}" ${checked.has(id) ? 'checked' : ''}> <span class="mono">${esc(id)}</span> ${esc(MODE_LABEL[s.mode])}${s.attack ? '・' + AL[s.attack] : ''}（本測定 ${m}）</label>`; }).join('') : '<p class="muted">保存されたセッションはありません。</p>';
+  $('#st-boot').value = App.settings.bootstrapN;
+  $('#st-J').value = App.statsJ ?? App.settings.justWindow;
+}
+async function runAnalysisUI() {
+  const ids = $$('#st-sessions input:checked').map((i) => i.value);
+  if (!ids.length) { toast('セッションを 1 つ以上選んでください。', true); return; }
+  App.statsSel = ids;
+  const sessions = ids.map((id) => Store.loadSession(id)).filter(Boolean);
+  App.settings.bootstrapN = +$('#st-boot').value; Store.saveSettings(App.settings);
+  const btn = $('#st-run'); btn.disabled = true; const bar = $('#st-progress');
+  try {
+    const J = +$('#st-J').value || App.settings.justWindow;
+    const a = await runAnalysis(sessions, { bootstrapN: App.settings.bootstrapN, J }, (msg) => { bar.hidden = false; bar.querySelector('span').textContent = msg; });
+    a.sessions = sessions.map((s) => ({ id: s.id, mode: s.mode, attack: s.attack, device: s.device, env: s.env, settings: s.settings }));
+    App.analysis = a; App.statsAttack = App.statsAttack || AT.find((x) => a.defaultGroup[x]) || 'slam'; renderStats();
+  } catch (err) { console.error(err); toast('解析エラー: ' + err.message, true); }
+  finally { btn.disabled = false; bar.hidden = true; }
+}
+function curJ() { const v = +$('#st-J').value; return Number.isFinite(v) && v > 0 ? v : App.settings.justWindow; }
+function curD() { return App.analysis && App.analysis.sessions[0] ? App.analysis.sessions[0].settings.invincibleWindow : App.settings.invincibleWindow; }
+function groupFor(attack) { const a = App.analysis; const sel = (App.groupSel || {})[attack] || a.defaultGroup[attack]; return a.groups.find((g) => g.key === sel) || null; }
+function renderStats() {
+  const a = App.analysis; if (!a) return;
+  const J = curJ(), D = curD();
+  const multi = a.sessionIds.length > 1;
+  // 比較表
+  const rows = AT.map((at) => {
+    const g = groupFor(at); const ok = g && g.fit.mle.ok;
+    if (!ok) return `<tr><td><span class="dot" style="background:${COLORS[at]}"></span>${AL[at]}</td><td>${g ? g.counts.valid : '—'}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+    const m = g.fit.mle, pj = Core.pJust(m.mu, m.sigma, J);
+    const obsJ = g.rows.filter((r) => r.e !== null && r.e >= -J && r.e <= 0).length / g.rows.length;
+    const nGroups = a.groups.filter((x) => x.attack === at).length;
+    return `<tr><td><span class="dot" style="background:${COLORS[at]}"></span>${AL[at]}${nGroups > 1 ? ` <span class="tag warn" title="タイミング設定または測定モードの異なるデータがあります">${nGroups} 群</span>` : ''}</td><td>${g.counts.valid}</td><td>${fmt(m.mu, 1)}</td><td>${fmt(m.sigma, 1)}</td><td>${pct(pj)}</td><td>${pct(obsJ)}</td><td>${fmt(m.mu + J / 2, 1)}</td></tr>`;
+  }).join('');
+  let html = `<section class="card"><h2>攻撃ごとの比較</h2>
+    <p class="muted">解析：${esc(a.analyzed_at)} ／ セッション ${a.sessionIds.map(esc).join('、')}${multi ? '（明示的に選択して結合）' : ''}。μ・σ は観測開始による切断と無入力の右打ち切りを考慮した最尤推定。Just 成功率（モデル）は非切断の正規分布で P = Φ(−μ/σ) − Φ((−J−μ)/σ)。</p>
+    <div class="scroll-x"><table class="tbl"><tr><th>攻撃</th><th>有効試行数</th><th>平均誤差 μ（ms）</th><th>標準偏差 σ（ms）</th><th>Just 成功率（モデル）</th><th>Just 成功率（実測）</th><th>μ − 最適（−J/2）</th></tr>${rows}</table></div>
+    <h3>5 種類の正規分布の比較</h3><canvas id="ch-overlay" class="tall"></canvas></section>`;
+  // 攻撃の選択
+  html += `<section class="card"><div class="ctl-row"><b>詳細：</b>${AT.map((at) => `<button class="chip ${App.statsAttack === at ? 'on' : ''}" data-statsattack="${at}">${AL[at]}</button>`).join('')}</div><div id="attack-detail"></div></section>`;
+  $('#stats-body').innerHTML = html;
+  // 重ね合わせ
+  const series = [], legend = [];
+  let lo = -600, hi = 300;
+  for (const at of AT) { const g = groupFor(at); if (!g || !g.fit.mle.ok) continue; const m = g.fit.mle; lo = Math.min(lo, m.mu - 4 * m.sigma); hi = Math.max(hi, m.mu + 4 * m.sigma); }
+  for (const at of AT) {
+    const g = groupFor(at); if (!g || !g.fit.mle.ok) continue; const m = g.fit.mle, pts = [];
+    for (let x = lo; x <= hi; x += 2) pts.push([x, Core.normPdf((x - m.mu) / m.sigma) / m.sigma]);
+    series.push({ type: 'line', pts, color: COLORS[at], width: 2 }); legend.push({ label: AL[at], color: COLORS[at] });
+  }
+  drawChart($('#ch-overlay'), { x: [lo, hi], xLabel: '入力誤差 E = T − H（ms）', yLabel: '確率密度', bands: [{ x0: -J, x1: 0, fill: COLORS.band, label: 'ジャスト受付' }, { x0: -D, x1: -J, fill: 'rgba(125,255,168,0.05)' }], vlines: [{ x: 0, color: '#fff' }], series, legend });
+  renderAttackDetail();
+}
+function renderAttackDetail() {
+  const a = App.analysis, at = App.statsAttack, J = curJ(), D = curD();
+  const box = $('#attack-detail');
+  const groups = a.groups.filter((g) => g.attack === at);
+  const g = groupFor(at);
+  if (!g) { box.innerHTML = `<p class="muted">${AL[at]} のデータはまだありません。</p>`; return; }
+  const sel = groups.length > 1 ? `<div class="note warn">${AL[at]} には測定モードまたはタイミング設定の異なるデータが ${groups.length} 群あります。標準では統合しません。表示する群：<select id="grp-sel">${groups.map((x) => `<option value="${esc(x.key)}" ${x.key === g.key ? 'selected' : ''}>${esc(MODE_LABEL[x.mode] || x.mode)}・${esc(x.params)}（有効 ${x.counts.valid}）</option>`).join('')}</select></div>` : '';
+  const f = g.fit, m = f.mle, s = f.simple, d = f.descriptive, c = g.counts;
+  let html = `<h2>${AL[at]}</h2>${sel}
+    <p class="muted">測定モード：${esc(MODE_LABEL[g.mode] || g.mode)} ／ タイミング設定：<code>${esc(g.params)}</code> ／ セッション：${g.sessions.map(esc).join('、')}</p>
+    <p>有効試行 ${c.valid}（入力あり ${c.observed}、無入力 ${c.censored}）、練習 ${c.practice}（推定に含めない）、除外 ${c.excluded}、中断 ${c.aborted}、予兆前の早押し ${c.preWarning}（有効データとして含む）、フレーム落ち警告 ${c.frameDrop}。</p>`;
+  if (!m.ok) { box.innerHTML = html + warnList(m.warnings); return; }
+  const P = Core.normalOutcomeProbs(m.mu, m.sigma, J, D), Pc = Core.conditionalOutcomeProbs(m.mu, m.sigma, g.rows, J, D);
+  const obsCount = (k) => g.rows.filter((r) => Core.classify(r.e, J, D) === k).length;
+  const N = g.rows.length;
+  const bootJ = g.boot ? ciOf(g.boot.map((b) => Core.pJust(b.mu, b.sigma, J))) : null;
+  const obsJ = obsCount('just'), wJ = wilson(obsJ, N);
+  const muOpt = -J / 2, pOpt = Core.pJust(muOpt, m.sigma, J);
+  html += `<h3>推定値</h3><div class="scroll-x"><table class="tbl"><tr><th></th><th>推定値</th><th>標準誤差</th><th>95% 信頼区間（ブートストラップ ${g.ci ? g.ci.nBoot : 0} 回）</th></tr>
+      <tr><td>μ（最尤：切断・打ち切り考慮）</td><td><b>${fmt(m.mu, 2)}</b> ms</td><td>${fmt(m.seMu, 2)}</td><td>${ciTxt(g.ci && g.ci.mu, 2)}</td></tr>
+      <tr><td>σ（最尤：切断・打ち切り考慮）</td><td><b>${fmt(m.sigma, 2)}</b> ms</td><td>${fmt(m.seSigma, 2)}</td><td>${ciTxt(g.ci && g.ci.sigma, 2)}</td></tr>
+      <tr><td>μ（単純：入力ありの標本平均）</td><td>${fmt(s.mu, 2)} ms</td><td>—</td><td>${ciTxt(g.ci && g.ci.smu, 2)}</td></tr>
+      <tr><td>σ（単純：n で割る最尤 SD／n−1 の不偏 SD）</td><td>${fmt(s.sigma, 2)} ／ ${fmt(s.sdUnbiased, 2)} ms</td><td>—</td><td>${ciTxt(g.ci && g.ci.ssd, 2)}</td></tr>
+      <tr><td>Just 成功率（モデル・非切断）</td><td>${pct(Core.pJust(m.mu, m.sigma, J))}</td><td>—</td><td>${ciTxt(bootJ, 1, pct)}</td></tr>
+      <tr><td>Just 成功率（実測）</td><td>${pct(obsJ / N)}（${obsJ}/${N}）</td><td>—</td><td>${ciTxt(wJ, 1, pct)}（Wilson）</td></tr></table></div>
+    <p class="muted">${m.truncation.negligible ? '観測開始による切断の影響は無視できる大きさです（最大 ' + (100 * m.truncation.maxProb).toFixed(3) + '%）。' : '観測開始による切断（最大 ' + (100 * m.truncation.maxProb).toFixed(1) + '%）を尤度に反映しています。'}σ が小さいほど入力タイミングが安定しています。</p>
+    <h3>結果の確率</h3><div class="scroll-x"><table class="tbl"><tr><th></th><th>実測（割合）</th><th>モデル：非切断の正規分布</th><th>モデル：観測可能な試行（切断・打ち切りを条件付け）</th></tr>
+      ${[['just', 'ジャスト回避'], ['normal', '通常回避'], ['early_hit', '早すぎ被弾'], ['late_hit', '遅すぎ被弾'], ['no_input', '無入力（観測終了まで）']].map(([k, l]) => `<tr><td>${l}</td><td>${pct(obsCount(k) / N)}</td><td>${k === 'no_input' ? '—（遅すぎ被弾に含む）' : pct(P[k])}</td><td>${pct(Pc[k])}</td></tr>`).join('')}</table></div>
+    <h3>入力タイミングの最適化</h3>
+    <p>σ を一定（${fmt(m.sigma, 1)} ms）とし平均だけを動かすと、対称な受付区間 [−J, 0] での理論最適は μ = −J/2 = <b>${fmt(muOpt, 1)} ms</b>。現在の μ との差は <b>${fmt(m.mu - muOpt, 1)} ms</b>（${m.mu > muOpt ? '遅め' : '早め'}）で、最適にした場合の Just 成功率は ${pct(pOpt)}（現在 ${pct(Core.pJust(m.mu, m.sigma, J))}）。これは正規分布の形と σ が変わらないという仮定の下の値です。実際に入力タイミングを変えると σ も変わる可能性があります。</p>
+    <h3>分布の形</h3><div class="scroll-x"><table class="tbl"><tr><th>平均</th><th>中央値</th><th>標準偏差（n−1）</th><th>歪度</th><th>尖度（超過）</th><th>外れ値</th><th>最小〜最大</th></tr>
+      <tr><td>${fmt(d.mean, 1)}</td><td>${fmt(d.p50, 1)}</td><td>${fmt(d.sd, 1)}</td><td>${fmt(d.skewness, 2)}</td><td>${fmt(d.excessKurtosis, 2)}</td><td>${d.outliers.count}（${pct(d.outliers.fraction)}）</td><td>${fmt(d.min, 0)}〜${fmt(d.max, 0)}</td></tr></table></div>
+    <p>正規性（確率積分変換による検定）：KS = ${fmt(m.gof && m.gof.ks, 3)}（p = ${pTxt(m.gof && m.gof.pKS)}）、Anderson–Darling = ${fmt(m.gof && m.gof.ad, 3)}（p = ${pTxt(m.gof && m.gof.pAD)}）。p 値は推定込みのパラメトリック・ブートストラップ（${(m.gof && m.gof.nSim) || 0} 回）。</p>
+    ${warnList(g.warnings)}
+    <div class="charts2"><canvas id="ch-hist"></canvas><canvas id="ch-cdf"></canvas><canvas id="ch-qq"></canvas><canvas id="ch-ts"></canvas><canvas id="ch-J"></canvas><canvas id="ch-mu"></canvas></div>
+    <p class="muted">試行順：Spearman ρ = ${fmt(g.trend.spearman, 3)}（近似 p = ${pTxt(g.trend.spearmanP)}）、lag-1 自己相関 ${fmt(g.trend.lag1, 3)}（±${fmt(g.trend.lag1Bound, 3)} が独立時の目安）。</p>`;
+  box.innerHTML = html;
+  if ($('#grp-sel')) $('#grp-sel').onchange = (e) => { (App.groupSel = App.groupSel || {})[at] = e.target.value; renderStats(); };
+  const obs = g.rows.filter((r) => r.e !== null).map((r) => r.e);
+  if (obs.length < 2) return;
+  const lo = Math.min(-J - 100, m.mu - 4 * m.sigma, ...obs.filter((v) => v > m.mu - 8 * m.sigma)), hi = Math.max(150, m.mu + 4 * m.sigma);
+  const pdf = [], cdf = []; for (let x = lo; x <= hi; x += 1) { pdf.push([x, Core.normPdf((x - m.mu) / m.sigma) / m.sigma]); cdf.push([x, Core.normCdf((x - m.mu) / m.sigma)]); }
+  const bands = [{ x0: -J, x1: 0, fill: COLORS.band, label: 'ジャスト受付' }];
+  const col = COLORS[at];
+  const binW = Math.max(5, Math.round(m.sigma / 4 / 5) * 5);
+  drawChart($('#ch-hist'), { x: [lo, hi], xLabel: '入力誤差 E（ms）', yLabel: '確率密度', bands, vlines: [{ x: 0, color: '#fff' }], series: [{ type: 'bars', bins: histBins(obs, lo, hi, binW, true).map((b) => ({ ...b, y: b.y * obs.length / N })), color: col }, { type: 'line', pts: pdf, color: '#fff' }], legend: [{ label: '実測', color: col }, { label: '正規 PDF（最尤）', color: '#fff' }] });
+  drawChart($('#ch-cdf'), { x: [lo, hi], y: [0, 1], xLabel: '入力誤差 E（ms）', yLabel: 'CDF（無入力は +∞）', bands, series: [{ type: 'step', pts: ecdfPts(g.rows.map((r) => r.e)), color: col }, { type: 'line', pts: cdf, color: '#fff', dash: [5, 4] }], legend: [{ label: '経験 CDF', color: col }, { label: '正規 CDF', color: '#fff', dash: [5, 4] }] });
+  const qq = Core.qqPoints(obs, m.mu, m.sigma), qlo = Math.min(...qq.map((p) => Math.min(p[0], p[1]))), qhi = Math.max(...qq.map((p) => Math.max(p[0], p[1])));
+  drawChart($('#ch-qq'), { x: [qlo, qhi], y: [qlo, qhi], xLabel: '正規分布の理論分位点（ms）', yLabel: '実測（ms）', series: [{ type: 'line', pts: [[qlo, qlo], [qhi, qhi]], color: '#fff', dash: [4, 4] }, { type: 'points', pts: qq, color: col }], legend: [{ label: '正規 Q-Q', color: col }] });
+  const seq = g.rows.map((r, i) => [i + 1, r.e]).filter((p) => p[1] !== null), ys = seq.map((p) => p[1]);
+  const ma = Core.movingAverage(ys, 10);
+  drawChart($('#ch-ts'), { x: [0, g.rows.length + 1], y: [Math.min(...ys) - 20, Math.max(...ys) + 20], xLabel: '試行番号（有効試行の順）', yLabel: '入力誤差 E（ms）', series: [{ type: 'points', pts: seq, color: col }, { type: 'line', pts: seq.map((p, i) => [p[0], ma[i] ?? NaN]), color: '#fff', width: 2 }], legend: [{ label: '試行', color: col }, { label: '移動平均（10）', color: '#fff' }] });
+  const jpts = []; for (let j = 50; j <= 300; j += 2) jpts.push([j, Core.pJust(m.mu, m.sigma, j)]);
+  drawChart($('#ch-J'), { x: [50, 300], y: [0, 1], xLabel: 'ジャスト受付時間 J（ms）', yLabel: '理論 Just 成功率', yFmt: (v) => (100 * v).toFixed(0) + '%', vlines: [110, 176, 181.5, 187].map((x) => ({ x, color: x === J ? '#fff' : 'rgba(200,220,255,0.35)', label: x === J ? 'J' : '' })), series: [{ type: 'line', pts: jpts, color: col, width: 2.2 }] });
+  const mlo = -J - 3 * m.sigma, mhi = 3 * m.sigma, mpts = []; for (let x = mlo; x <= mhi; x += 1) mpts.push([x, Core.pJust(x, m.sigma, J)]);
+  drawChart($('#ch-mu'), { x: [mlo, mhi], y: [0, 1], xLabel: '平均入力誤差 μ（ms、σ 一定）', yLabel: '理論 Just 成功率', yFmt: (v) => (100 * v).toFixed(0) + '%', vlines: [{ x: m.mu, color: col, label: '現在' }, { x: muOpt, color: '#fff', label: '最適 −J/2' }], series: [{ type: 'line', pts: mpts, color: col, width: 2.2 }] });
+}
+
+/* -------------------------------------------------------- 出力 --- */
+function stripAnalysis(a) { return JSON.parse(JSON.stringify(a, (k, v) => (['rows', 'boot', 'pit'].includes(k) ? undefined : v))); }
+function sessionExport(s) {
+  return {
+    app: APP_NAME, app_version: Core.VERSION, export_schema: 'jdpred-session-export/1', exported_at: new Date().toISOString(),
+    time_base: { unit: 'ms', origin: 'セッション作成時刻（performance.timeOrigin + performance.now()）からの相対時刻', note: '同一ページ読み込み内の時刻差は単調時計で正確。再読み込みをまたぐ差は壁時計に依存する近似。描画フレーム時刻は表示の発光時刻ではない。' },
+    session: { id: s.id, mode: s.mode, attack: s.attack, created_at: s.created_at, seed: s.seed, status: s.status, settings: s.settings, input_device: s.device, loads: s.loads, planned_queue: s.queue },
+    environment: s.env, trials: s.trials,
+  };
+}
+function download(name, text, type) { const url = URL.createObjectURL(new Blob([text], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }
+/** SAOFD シミュレーション向けのパラメータ JSON（未測定の攻撃は null） */
+function paramsExport(a) {
+  const dist = {}, meta = {};
+  const J = curJOr(a), D = a.sessions[0] ? a.sessions[0].settings.invincibleWindow : 350;
+  for (const at of AT) {
+    const key = a.defaultGroup[at]; const g = key && a.groups.find((x) => x.key === key);
+    if (!g || !g.fit.mle.ok) { dist[at] = null; meta[at] = null; continue; }
+    const m = g.fit.mle;
+    dist[at] = { mu_ms: m.mu, sigma_ms: m.sigma };
+    meta[at] = {
+      valid_trials: g.counts.valid, observed_inputs: g.counts.observed, practice_trials: g.counts.practice, no_input_trials: g.counts.censored, excluded_trials: g.counts.excluded, aborted_trials: g.counts.aborted,
+      ci95: { mu_ms: g.ci ? g.ci.mu : null, sigma_ms: g.ci ? g.ci.sigma : null, bootstrap_replicates: g.ci ? g.ci.nBoot : 0 },
+      simple_estimate: { mu_ms: g.fit.simple.mu, sigma_ms: g.fit.simple.sigma },
+      estimator: 'maximum likelihood with left truncation at observation start and right censoring at observation end',
+      normality: { ks: m.gof ? m.gof.ks : null, p_ks: m.gof ? m.gof.pKS ?? null : null, anderson_darling: m.gof ? m.gof.ad : null, p_ad: m.gof ? m.gof.pAD ?? null : null, skewness: g.fit.descriptive.skewness, excess_kurtosis: g.fit.descriptive.excessKurtosis, outlier_fraction: g.fit.descriptive.outliers.fraction, warning: (m.gof && m.gof.pAD < 0.05) || Math.abs(g.fit.descriptive.skewness) > 1 },
+      measurement_mode: g.mode, attack_timing: JSON.parse(g.params || 'null'), input_devices: g.devices, sessions: g.sessions,
+      derived: { note: '推定パラメータから計算した値（非切断の正規分布）', just_window_ms: J, invincible_window_ms: D, ...Object.fromEntries(Object.entries(Core.normalOutcomeProbs(m.mu, m.sigma, J, D)).map(([k, v]) => ['p_' + k, v])), mu_optimal_ms: -J / 2 },
+      other_groups: a.groups.filter((x) => x.attack === at && x.key !== key).map((x) => ({ mode: x.mode, attack_timing: JSON.parse(x.params || 'null'), valid_trials: x.counts.valid })),
+    };
+  }
+  const env = a.sessions[0] ? a.sessions[0].env : null;
+  return {
+    schema_version: '1.0', model: 'attack_specific_predictive_normal', time_unit: 'ms', error_definition: 'input_time_minus_impact_time',
+    distributions: dist, metadata: meta,
+    source: { app_version: Core.VERSION, sessions: a.sessionIds, analyzed_at: a.analyzed_at, browser: env ? env.userAgent : null, platform: env ? env.platform : null },
+    notes: ['人間の入力タイミング分布のみ。ネットワーク遅延・フレーム量子化・ゲーム内処理遅延は含まない。', 'ブラウザ・ディスプレイ・入力デバイスの遅延が推定値に含まれる。', '攻撃ごとに独立に推定（パラメータの共有・プールなし）。', '使用例：errorMs = mu_ms + sigma_ms * normalRandom(); humanInputTime = impactTime + errorMs;'],
+  };
+}
+function curJOr(a) { const el = $('#st-J'); const v = el ? +el.value : NaN; return Number.isFinite(v) && v > 0 ? v : (a.sessions[0] ? a.sessions[0].settings.justWindow : 110); }
+
+/* -------------------------------------------------------- データ管理 --- */
+function renderDataPanel() {
+  const ids = Store.index().slice().reverse();
+  const rows = ids.map((id) => {
+    const s = Store.loadSession(id); if (!s) return '';
+    const done = s.trials.filter((t) => t.status === 'completed').length, planned = s.queue.length - s.queue.filter((q) => q.retry_of).length;
+    return `<tr><td class="mono">${esc(id)}</td><td>${esc(MODE_LABEL[s.mode])}${s.attack ? '・' + AL[s.attack] : ''}</td><td>${esc(s.created_at.replace('T', ' ').slice(0, 19))}</td><td>${esc({ active: '途中', complete: '完了' }[s.status] || s.status)}</td><td>${done} / ${planned}</td><td>${s.trials.filter((t) => t.status === 'aborted').length}</td><td>${esc(s.device || '—')}</td>
+      <td class="acts"><button class="btn sm" data-act="resume" data-id="${esc(id)}" ${s.status === 'complete' || s.imported_at ? 'disabled' : ''}>再開</button><button class="btn sm" data-act="view" data-id="${esc(id)}">閲覧</button><button class="btn sm" data-act="csv" data-id="${esc(id)}">CSV</button><button class="btn sm" data-act="json" data-id="${esc(id)}">JSON</button><button class="btn sm" data-act="params" data-id="${esc(id)}">パラメータJSON</button><button class="btn sm danger" data-act="delete" data-id="${esc(id)}">削除</button></td></tr>`;
+  }).join('');
+  $('#data-table').innerHTML = rows ? `<div class="scroll-x"><table class="tbl"><tr><th>セッション</th><th>モード</th><th>作成</th><th>状態</th><th>完了/計画</th><th>中断</th><th>デバイス</th><th></th></tr>${rows}</table></div>` : '<p class="muted">保存されたセッションはありません。</p>';
+  // 攻撃ごとの測定履歴
+  const hist = AT.map((at) => { const ss = ids.map((id) => Store.loadSession(id)).filter((s) => s && s.trials.some((t) => t.attack_type === at)); const n = ss.reduce((k, s) => k + s.trials.filter((t) => t.attack_type === at && t.valid_for_fit).length, 0); return `<tr><td>${AL[at]}</td><td>${ss.length}</td><td>${n}</td></tr>`; }).join('');
+  $('#data-history').innerHTML = `<table class="tbl small"><tr><th>攻撃</th><th>セッション数</th><th>有効試行の合計</th></tr>${hist}</table>`;
+  $('#storage-status').textContent = Store.available() ? '' : 'このブラウザではローカル保存が使えません（プライベートモード等）。';
+}
+async function dataAction(act, id) {
+  const s = Store.loadSession(id); if (!s) return;
+  if (act === 'resume') { switchTab('measure'); resumeSession(id); }
+  else if (act === 'csv') download(`${id}_trials.csv`, '﻿' + Core.toCSV(s.trials), 'text/csv;charset=utf-8');
+  else if (act === 'json') download(`${id}_session.json`, JSON.stringify(sessionExport(s), null, 1), 'application/json');
+  else if (act === 'params') { toast('解析中…'); const a = await runAnalysis([s], { bootstrapN: App.settings.bootstrapN, J: s.settings.justWindow }, () => {}); a.sessions = [{ id: s.id, mode: s.mode, attack: s.attack, device: s.device, env: s.env, settings: s.settings }]; download(`${id}_saofd_params.json`, JSON.stringify(paramsExport(a), null, 2), 'application/json'); }
+  else if (act === 'delete') { if (await askConfirm(`セッション ${id} を削除します。元に戻せません。`, '削除する', true)) { if (App.session && App.session.id === id) { App.session = null; App.state = 'idle'; App.runner = null; setOverlay(''); refreshButtons(); updateHud(true); } Store.deleteSession(id); renderDataPanel(); } }
+  else if (act === 'view') {
+    const cols = ['trial_id', 'attack_type', 'is_practice', 'status', 'outcome', 'input_error_ms', 'input_device', 'valid_for_fit', 'invalid_reason', 'frame_max_ms'];
+    $('#data-view').innerHTML = `<h3>${esc(id)} の試行（${s.trials.length}）</h3><div class="scroll"><table class="tbl small"><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr>${s.trials.map((t) => `<tr>${cols.map((c) => `<td>${typeof t[c] === 'number' ? fmt(t[c], 1) : esc(t[c] ?? '')}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  }
+}
+function importSessionJSON(j) {
+  if (!(j && j.session && Array.isArray(j.trials))) throw new Error('このアプリのセッション JSON ではありません。');
+  let id = j.session.id; if (Store.loadSession(id)) id = id + '-import-' + Date.now().toString(36);
+  const s = { format: 'jdpred-session/1', app_version: j.app_version, id, seed: j.session.seed, mode: j.session.mode, attack: j.session.attack, created_at: j.session.created_at, settings: mergeSettings(DEFAULT_SETTINGS, j.session.settings),
+    queue: j.session.planned_queue || [], cursor: (j.session.planned_queue || []).length, trials: j.trials, inProgress: null, device: j.session.input_device, status: 'complete', env: j.environment, loads: j.session.loads || [], imported_at: new Date().toISOString() };
+  return s;
+}
+
+/* ------------------------------------------------------------ 検証画面 --- */
+async function runAllTests() {
+  const out = document.createElement('div'); await yieldUI();
+  const t0 = performance.now();
+  const res = Core.runCoreTests();
+  const T = async (name, fn) => { try { const r = await fn(); res.push({ name, pass: !!(r === true || (r && r.pass)), detail: r && r.detail ? r.detail : '' }); } catch (e) { res.push({ name, pass: false, detail: e.message }); } };
+  // 10. 保存した JSON を再読み込みして同じ解析結果を再現
+  await T('10. 保存した JSON を再読み込みして同じ解析結果を再現', async () => {
+    const st = mergeSettings(DEFAULT_SETTINGS, null), rng = Core.makeRng('roundtrip');
+    const sess = createSession(st, 'mixed', 'slam'); sess.queue = sess.queue.slice(0, 60);
+    let tt = 1000;
+    for (const item of sess.queue) {
+      const tr = Core.createTrialRunner({ item, settings: st, toRel: (t) => t }); tr.start(tt); let k = 0; const target = -90 + 40 * rng.normal();
+      while (!tr.state.done && k++ < 100000) { tt += 16.7; if (tr.state.H !== null && !tr.state.firstInput && tt >= tr.state.H + target) tr.input({ time: tr.state.H + target, eventTs: tr.state.H + target, handlerTs: tt, device: 'keyboard', code: 'Space', source: 'event' }); tr.frame(tt); }
+      sess.trials.push(tr.result({ mode: 'mixed', fields: { session_id: sess.id, timing_key: Core.timingKey(item.attack, st.attacks[item.attack]) } }));
+      tt += 500;
+    }
+    sess.status = 'complete';
+    const a1 = await runAnalysis([sess], { bootstrapN: 0, J: 176 }, () => {});
+    const text = JSON.stringify(sessionExport(sess));
+    const s2 = importSessionJSON(JSON.parse(text));
+    if (!Store.saveSession(s2)) return { pass: false, detail: '保存に失敗' };
+    const s3 = Store.loadSession(s2.id); Store.deleteSession(s2.id);
+    const a2 = await runAnalysis([s3], { bootstrapN: 0, J: 176 }, () => {});
+    const diffs = a1.groups.map((g) => { const h = a2.groups.find((x) => x.key === g.key); return h && g.fit.mle.ok ? Math.max(Math.abs(g.fit.mle.mu - h.fit.mle.mu), Math.abs(g.fit.mle.sigma - h.fit.mle.sigma)) : (g.fit.mle.ok ? Infinity : 0); });
+    return { pass: a1.groups.length === 5 && a2.groups.length === 5 && Math.max(...diffs) === 0, detail: `5 攻撃 × 各 ${a1.groups[0].counts.valid} 試行、最大差 ${Math.max(...diffs)}` };
+  });
+  await T('ローカル保存：書き込み → 読み込み', () => { const id = '__selftest__'; const s = { id, trials: [{ a: 1.25, b: null }], queue: [], status: 'complete', created_at: new Date().toISOString() }; if (!Store.saveSession(s)) return false; const r = Store.loadSession(id); Store.deleteSession(id); return r && r.trials[0].a === 1.25 && r.trials[0].b === null; });
+  await T('入力イベント時刻が performance.now() と同じ時計', () => { const ev = new Event('x'), now = performance.now(), n = normalizeEventTs(ev.timeStamp, now); return { pass: n !== null && Math.abs(n - now) < 50, detail: `event ${fmt(ev.timeStamp, 3)} / now ${fmt(now, 3)}` }; });
+  await T('performance.now() の分解能（目安）', () => { let d = Infinity, prev = performance.now(); for (let i = 0; i < 20000; i++) { const t = performance.now(); if (t > prev) { d = Math.min(d, t - prev); prev = t; } } return { pass: d <= 1, detail: `最小刻み ≈ ${d.toFixed(4)} ms` }; });
+  const fail = res.filter((r) => !r.pass).length;
+  out.innerHTML = `<p><b>${res.length - fail} / ${res.length}</b> 件成功（${((performance.now() - t0) / 1000).toFixed(1)} 秒）</p><table class="tbl small"><tr><th></th><th>検査</th><th>詳細</th></tr>${res.map((r) => `<tr><td>${r.pass ? '<span class="tag ok">PASS</span>' : '<span class="tag bad">FAIL</span>'}</td><td>${esc(r.name)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
+  window.__testResults = res;
+}
+
+
+/* ------------------------------------------------------------ 起動 --- */
+function bindUI() {
+  $$('.tab').forEach((t) => (t.onclick = () => switchTab(t.dataset.tab)));
+  document.addEventListener('click', (e) => {
+    const sa = e.target.closest('[data-statsattack]'); if (sa) { App.statsAttack = sa.dataset.statsattack; renderStats(); return; }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'continue') continueSession();
+    else if (act === 'goto-stats') switchTab('stats');
+    else if (act === 'settings-reset') askConfirm('設定を既定値に戻しますか？', '戻す').then((ok) => { if (ok) { App.settings = clone(DEFAULT_SETTINGS); Store.saveSettings(App.settings); renderSettings(); } });
+    else if (b.dataset.id) dataAction(act, b.dataset.id);
+  });
+  $('#btn-start').onclick = startNewSession;
+  $('#btn-continue').onclick = continueSession;
+  $('#btn-pause').onclick = () => pauseSession('user_pause');
+  $('#btn-end').onclick = endSession;
+  $('#btn-max').onclick = () => { document.body.classList.toggle('maximized'); setTimeout(() => App.scene && App.scene.resize(), 50); };
+  $('#btn-fs').onclick = () => { const el = $('#stage'); if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch((err) => toast('フルスクリーンにできません: ' + err.message, true)); };
+  document.addEventListener('fullscreenchange', () => setTimeout(() => App.scene && App.scene.resize(), 50));
+  $('#m-mode').onchange = () => { $('#m-attack-row').hidden = $('#m-attack-row-label').hidden = $('#m-mode').value !== 'individual'; App.settings.mode = $('#m-mode').value; Store.saveSettings(App.settings); };
+  $('#m-attack').onchange = () => { App.previewAttack = $('#m-attack').value; App.settings.attack = App.previewAttack; Store.saveSettings(App.settings); };
+  $('#st-run').onclick = runAnalysisUI;
+  $('#st-J').oninput = () => { if (App.analysis) renderStats(); };
+  $$('#st-Jpresets [data-j]').forEach((b) => (b.onclick = () => { $('#st-J').value = b.dataset.j; if (App.analysis) renderStats(); }));
+  $('#st-params').onclick = () => { if (!App.analysis) return toast('先に解析を実行してください。', true); download(`saofd_params_${App.analysis.sessionIds.join('+')}.json`, JSON.stringify(paramsExport(App.analysis), null, 2), 'application/json'); };
+  $('#st-json').onclick = () => { if (!App.analysis) return toast('先に解析を実行してください。', true); download(`analysis_${App.analysis.sessionIds.join('+')}.json`, JSON.stringify(stripAnalysis(App.analysis), null, 1), 'application/json'); };
+  $('#import-file').onchange = (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => { try { const s = importSessionJSON(JSON.parse(fr.result)); Store.saveSession(s); renderDataPanel(); toast(`取り込みました：${s.id}（${s.trials.length} 試行）`); } catch (err) { toast('取り込みに失敗：' + err.message, true); } };
+    fr.readAsText(f);
+  };
+  $('#settings-form').addEventListener('change', (e) => { if (e.target.dataset.k && e.target.dataset.k !== 'inputKey') readSetting(e.target); });
+  $('#settings-form').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-preset]'); if (p) { setK(App.settings, p.dataset.preset, +p.dataset.v); Store.saveSettings(App.settings); renderSettings(); }
+    if (e.target.dataset && e.target.dataset.k === 'inputKey') {
+      capturingKey = true; e.target.value = '（キーを押してください）';
+      const h = (ev) => { ev.preventDefault(); ev.stopPropagation(); capturingKey = false; window.removeEventListener('keydown', h, true); if (ev.code !== 'Escape') App.settings.inputKey = ev.code; Store.saveSettings(App.settings); renderSettings(); };
+      window.addEventListener('keydown', h, true);
+    }
+  });
+  bindPointer($('#stage-gl')); bindPointer($('#touch-dodge'));
+  window.addEventListener('resize', () => App.scene && App.scene.resize());
+  if ('ResizeObserver' in window) new ResizeObserver(() => App.scene && App.scene.resize()).observe($('#stage-gl'));
+}
+async function boot() {
+  App.settings = mergeSettings(DEFAULT_SETTINGS, Store.settings());
+  $('#m-attack').innerHTML = AT.map((a) => `<option value="${a}" ${a === App.settings.attack ? 'selected' : ''}>${AL[a]}</option>`).join('');
+  $('#m-mode').value = App.settings.mode; $('#m-attack-row').hidden = $('#m-attack-row-label').hidden = App.settings.mode !== 'individual';
+  App.previewAttack = App.settings.attack;
+  bindUI();
+  if (!Store.available()) toast('ローカル保存が利用できません。測定データは再読み込みで失われます。', true);
+    updateHud(true); refreshButtons();
+  requestAnimationFrame(frameLoop);
+  sceneKey = JSON.stringify([App.settings.quality, App.settings.effects]);
+  await initScene();
+  const act = Store.active(), s = act && Store.loadSession(act);
+  if (s && s.status === 'active') resumeSession(s.id);
+  else setOverlay(`<div class="ov-title">${APP_NAME}</div><div class="ov-text">突進・叩きつけ・衝撃波・AoE起爆・赤発光→咆哮の 5 種類の攻撃に対して、ジャスト回避の入力タイミング誤差を測ります。攻撃ごとに正規分布 N(μ, σ²) を独立に推定します。<br>右で測定モードと攻撃を選んで「測定を開始」を押してください。</div>`);
+  window.__app = App; window.runAllTests = runAllTests;
+}
+boot();
+
+</script>
+</body>
+</html>
