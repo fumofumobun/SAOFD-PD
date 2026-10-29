@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PD入力誤差測定</title>
-<meta name="description" content="SAOFD ジャスト回避研究用：5 種類の 3D 攻撃に対する人間の回避入力タイミング誤差を測定し、攻撃ごとの正規分布を推定するブラウザアプリ">
+<meta name="description" content="SAOFD ジャスト回避研究用：複数種類の 3D 攻撃に対する人間の回避入力タイミング誤差を測定し、攻撃ごとの正規分布を推定するブラウザアプリ">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
 </script>
@@ -14,7 +14,6 @@
   color-scheme: dark;
   --bg: #05080f; --bg2: #0a1120; --panel: #0d1628; --line: #1c2b45; --line2: #27406a;
   --text: #d6e2f2; --muted: #8094ad; --accent: #41e0ff; --accent2: #ff5c8a; --ok: #6dffa8; --warn: #ffc857; --bad: #ff5a6e;
-  --cA: #5aa9ff; --cB: #ffb547; --cC: #e8eef8;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
@@ -52,7 +51,6 @@ main { padding: 12px 16px 40px; }
 .null-scene { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 13px var(--mono); color: var(--muted); }
 .hud-top { position: absolute; left: 10px; right: 10px; top: 8px; display: flex; gap: 12px; align-items: center; pointer-events: none; font-size: 13px; text-shadow: 0 1px 3px #000; flex-wrap: wrap; }
 .cond-badge { padding: 2px 10px; border-radius: 4px; font-weight: 700; color: #001018; }
-.cond-badge.cA { background: var(--cA); } .cond-badge.cB { background: var(--cB); } .cond-badge.cC { background: var(--cC); }
 .prog { flex: 1; min-width: 80px; max-width: 280px; height: 6px; background: rgba(255, 255, 255, .12); border-radius: 3px; overflow: hidden; }
 .prog i { display: block; height: 100%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .hud-result { position: absolute; left: 10px; bottom: 10px; right: 120px; pointer-events: none; font-size: 14px; text-shadow: 0 1px 3px #000; }
@@ -71,14 +69,8 @@ main { padding: 12px 16px 40px; }
 .side { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .btns .btn.primary { grid-column: 1 / -1; }
-#btn-new-wave { background: linear-gradient(180deg, #ff8a5c, #c94f2c); border-color: #ffb08a; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 12.5px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
-body.maximized .side, body.maximized .top { display: none; }
-body.maximized main { padding: 0; }
-body.maximized .measure { grid-template-columns: 1fr; height: 100vh; }
-body.maximized .stage { border-radius: 0; }
-body.maximized .btns-float { display: flex; }
 .stage:fullscreen { border-radius: 0; }
 
 /* タグ */
@@ -95,7 +87,6 @@ input, select { background: #08101e; color: var(--text); border: 1px solid var(-
 input:focus, select:focus { outline: 1px solid var(--accent); }
 .keycap { width: 140px; font-family: var(--mono); cursor: pointer; }
 .presets { margin-left: 8px; } .chip { background: #10203a; color: var(--accent); border: 1px solid var(--line2); border-radius: 12px; padding: 1px 9px; margin-right: 4px; cursor: pointer; font: inherit; font-size: 12px; }
-.cnt { margin-right: 14px; white-space: nowrap; } .cnt input { width: 64px !important; }
 .sw input { width: 18px; height: 18px; vertical-align: middle; }
 .note { padding: 8px 12px; border-radius: 6px; margin: 8px 0; border: 1px solid var(--line2); }
 .note.ok { border-color: #1e6b43; color: var(--ok); } .note.bad { border-color: #6b2737; color: #ffb3bf; } .note.warn { border-color: #6a5214; color: #ffe39a; }
@@ -111,7 +102,6 @@ input:focus, select:focus { outline: 1px solid var(--accent); }
 .tbl th, .tbl td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
 .tbl th { color: #9fd8f0; font-weight: 600; background: rgba(65, 224, 255, .04); }
 .tbl.small { font-size: 12px; } .tbl td.acts { white-space: nowrap; }
-.tbl .ci { color: var(--muted); font-size: 11px; }
 .scroll { max-height: 420px; overflow: auto; }
 canvas { width: 100%; height: 260px; display: block; background: rgba(4, 8, 16, .6); border: 1px solid var(--line); border-radius: 6px; }
 canvas.tall { height: 320px; }
@@ -119,8 +109,6 @@ canvas.tall { height: 320px; }
 .ctl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .ctl-row input[type=number] { width: 80px; }
 .warns { margin: 8px 0; padding-left: 20px; color: #ffe39a; }
-.limits li { margin: 4px 0; }
-.prose { max-width: 920px; line-height: 1.8; }
 .fatal { margin: 10px 16px; padding: 12px 16px; border: 1px solid #6b2737; background: #2a0d14; color: #ffc4cc; border-radius: 8px; }
 .fatal[hidden] { display: none; }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
@@ -149,6 +137,7 @@ canvas.tall { height: 320px; }
 .charts2 canvas { height: 270px; }
 .mselect { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 .mselect select { width: 100%; }
+#side-session:empty{display:none}
 
 </style>
 </head>
@@ -177,25 +166,17 @@ canvas.tall { height: 320px; }
       <aside class="side">
         <div class="panel mselect">
           <label for="m-mode">測定モード</label>
-          <select id="m-mode"><option value="individual">個別測定（1 種類を繰り返す）</option><option value="mixed">混合測定（5 種類をランダム順）</option></select>
+          <select id="m-mode" autocomplete="off"><option value="mixed" selected>混合測定（全種類をランダム順）</option><option value="individual">個別測定（1 種類を繰り返す）</option></select>
           <label for="m-attack" id="m-attack-row-label">攻撃</label>
-          <div id="m-attack-row"><select id="m-attack"></select></div>
+          <div id="m-attack-row"><select id="m-attack" autocomplete="off"></select></div>
         </div>
         <div class="btns">
           <button id="btn-start" class="btn primary">測定を開始</button>
           <button id="btn-continue" class="btn" disabled>開始／再開</button>
           <button id="btn-pause" class="btn" disabled>休憩</button>
           <button id="btn-end" class="btn danger" disabled>中断して終了</button>
-          <button id="btn-max" class="btn">3D 最大化</button>
-          <button id="btn-fs" class="btn">フルスクリーン</button>
         </div>
         <div id="side-session" class="panel"></div>
-        <div class="panel small muted">
-          <p>入力は<b>最初の 1 回だけ</b>採用されます。早すぎる入力・無入力もすべて記録します。</p>
-          <p>測定時刻は入力イベントの時刻（<code>event.timeStamp</code>）で、回避アニメーションは測定に影響しません。</p>
-          <p>タブ切替やフォーカス喪失で、進行中の試行は中断（無効）になります。</p>
-          <p id="scene-status"></p>
-        </div>
       </aside>
     </div>
   </section>
@@ -242,7 +223,6 @@ canvas.tall { height: 320px; }
 const Core = (() => {
 'use strict';
 
-const VERSION = '2.0.0';
 const LN_SQRT2PI = 0.5 * Math.log(2 * Math.PI);
 const SQRT2PI = Math.sqrt(2 * Math.PI);
 
@@ -313,8 +293,8 @@ function normCdf(x) {
       // 裾は Mills 比の連分数（後ろから評価）で相対精度を確保
       let f = z;
       for (let k = 120; k >= 1; k--) f = z + k / f;
-      c = e / f / 2.5066282746310002;
-    } else if (z < 7.07106781186547) {
+      c = e / f / SQRT2PI;
+    } else {
       let b = 3.52624965998911e-02 * z + 0.700383064443688;
       b = b * z + 6.37396220353165; b = b * z + 33.912866078383; b = b * z + 112.079291497871;
       b = b * z + 221.213596169931; b = b * z + 220.206867912376;
@@ -323,9 +303,6 @@ function normCdf(x) {
       b = b * z + 16.064177579207; b = b * z + 86.7807322029461; b = b * z + 296.564248779674;
       b = b * z + 637.333633378831; b = b * z + 793.826512519948; b = b * z + 440.413735824752;
       c = c / b;
-    } else {
-      let b = z + 0.65; b = z + 4 / b; b = z + 3 / b; b = z + 2 / b; b = z + 1 / b;
-      c = e / b / 2.506628274631;
     }
   }
   return x > 0 ? 1 - c : c;
@@ -365,21 +342,14 @@ function normQuantile(p) {
   return x - u / (1 + x * u / 2);
 }
 
-function logAddExp(a, b) {
-  if (a === -Infinity) return b;
-  if (b === -Infinity) return a;
-  return a > b ? a + Math.log1p(Math.exp(b - a)) : b + Math.log1p(Math.exp(a - b));
-}
-
-
 /* ---------------------------------- 入力誤差の正規分布（切断・打ち切り対応） --- */
 /**
- * 予測型の誤差 E_P = T_P − H ~ N(mu, sigma²)。
- * a は入力受付開始（予兆表示）を誤差空間で表した下限（a = W − H）。a = −∞ なら切断なし。
+ * 入力誤差 E = T − H ~ N(mu, sigma²) を下限 a で切断した分布。
+ * a は観測開始を誤差空間で表した値（a = 観測開始 − H）。a = −∞ なら切断なし。
  */
 function makePred(mu, sigma, a = -Infinity) {
   const za = Number.isFinite(a) ? (a - mu) / sigma : -Infinity;
-  const logZ = Number.isFinite(a) ? logNormSf(za) : 0; // log P(E ≥ a) 親分布
+  const logZ = Number.isFinite(a) ? logNormSf(za) : 0; // log P(E ≥ a)
   return { mu, sigma, a, za, logZ, Z: Math.exp(logZ) };
 }
 function predLogPdf(e, P) {
@@ -400,7 +370,6 @@ function predSample(P, rng) {
   return P.mu + P.sigma * normQuantile(u);
 }
 
-
 /** 判定（境界の扱い：−J ≤ e ≤ 0 をジャスト、−D ≤ e < −J を通常回避） */
 function classify(e, J, D) {
   if (e === null || e === undefined || Number.isNaN(e)) return 'no_input';
@@ -420,15 +389,6 @@ function outcomeProbs(cdf, J, D, obsAfter) {
     late_hit: Math.max(0, Fc - F0),
     no_input: Math.max(0, 1 - Fc),
   };
-}
-
-/** 台形則による数値積分（step ms） */
-function integrate(fn, lo, hi, step = 1) {
-  const n = Math.max(2, Math.ceil((hi - lo) / step));
-  const h = (hi - lo) / n;
-  let s = 0.5 * (fn(lo) + fn(hi));
-  for (let i = 1; i < n; i++) s += fn(lo + i * h);
-  return s * h;
 }
 
 /* -------------------------------------------------- 最適化・線形代数 --- */
@@ -514,23 +474,6 @@ function invertMatrix(M) {
   }
   return A.map((r) => r.slice(n));
 }
-/** 対称行列の固有値（Jacobi 法） */
-function symEigenvalues(M) {
-  const n = M.length, A = M.map((r) => r.slice());
-  for (let sweep = 0; sweep < 100; sweep++) {
-    let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i][j] * A[i][j];
-    if (off < 1e-22) break;
-    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
-      if (Math.abs(A[p][q]) < 1e-300) continue;
-      const th = (A[q][q] - A[p][p]) / (2 * A[p][q]);
-      const t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1));
-      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
-      for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; }
-      for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; }
-    }
-  }
-  return A.map((r, i) => r[i]).sort((x, y) => x - y);
-}
 
 /* ------------------------------------------------------- 記述統計 --- */
 function mean(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN; }
@@ -542,7 +485,6 @@ function quantileSorted(s, p) {
   if (vl === Infinity || vh === Infinity) return h - lo > 0 || vl === Infinity ? Infinity : vl;
   return vl + (h - lo) * (vh - vl);
 }
-function quantile(a, p) { return quantileSorted(a.slice().sort((x, y) => x - y), p); }
 function describe(a) {
   const s = a.slice().sort((x, y) => x - y);
   return { n: s.length, mean: mean(s), sd: sd(s), min: s[0], max: s[s.length - 1],
@@ -586,7 +528,6 @@ function movingAverage(a, w) {
   return out;
 }
 
-
 /* ---------------------------------------------- 適合度（PIT 統計量） --- */
 function ksUniform(u) {
   const s = u.slice().sort((x, y) => x - y), n = s.length; let D = 0;
@@ -598,7 +539,6 @@ function adUniform(u) {
   let A = 0; for (let i = 0; i < n; i++) A += (2 * i + 1) * (Math.log(s[i]) + Math.log(1 - s[n - 1 - i]));
   return -n - A / n;
 }
-
 
 /* ------------------------------------- 正規分布の最尤推定（切断・右打ち切り） --- */
 /**
@@ -631,8 +571,6 @@ function fitPredictive(rows) {
   // 切断の影響
   const aVals = rows.map((r) => r.a).filter(Number.isFinite);
   const truncProb = aVals.length ? Math.max(...aVals.map((a) => normCdf((a - mu) / sigma))) : 0;
-  // 通常正規（切断・打ち切りを無視）との比較
-  const naive = { mu: m0, sigma: nObs > 1 ? Math.sqrt(obs.reduce((s, v) => s + (v - m0) ** 2, 0) / nObs) : NaN };
   // PIT（観測期間内に条件付けた確率積分変換）
   const pit = [];
   for (const r of rows) if (r.e !== null) {
@@ -644,10 +582,10 @@ function fitPredictive(rows) {
   if (!opt.converged) warnings.push('最適化が収束判定に達しませんでした。');
   if (!hessOk) warnings.push('ヘッセ行列が正定値でなく、標準誤差を計算できません（識別性に問題がある可能性）。');
   return {
-    ok: true, model: 'normal' + (truncProb > 1e-3 ? '_truncated' : ''), mu, sigma, seMu, seSigma,
+    ok: true, mu, sigma, seMu, seSigma,
     logLik: -opt.fx, n, nObs, nCens, converged: opt.converged,
     truncation: { lowerErrorMs: aVals.length ? Math.max(...aVals) : null, maxProb: truncProb, negligible: truncProb < 1e-3 },
-    naive, gof: pit.length >= 5 ? { ks: ksUniform(pit), ad: adUniform(pit), nPit: pit.length } : null,
+    gof: pit.length >= 5 ? { ks: ksUniform(pit), ad: adUniform(pit), nPit: pit.length } : null,
     pit, warnings,
   };
 }
@@ -657,7 +595,6 @@ function simulatePredRows(rows, mu, sigma, rng) {
     return { a: r.a, c: r.c, e: e > r.c ? null : e };
   });
 }
-
 
 /* ---------------------------------------------------- 試行スケジュール --- */
 /** [lo,hi] を nb 等分した層を順列ブロックで巡回し、層内一様に値を取る（同一層の連続は最大2） */
@@ -675,19 +612,22 @@ function stratifiedSequence(rng, n, lo, hi, nb = 8) {
   return out;
 }
 
-
-/* ============================================================ 5 種類の攻撃 ===== */
-const ATTACKS = ['charge', 'slam', 'shockwave', 'aoe', 'roar'];
-const ATTACK_LABEL = { charge: '突進', slam: '叩きつけ', shockwave: '衝撃波', aoe: 'AoE起爆', roar: '赤発光→咆哮' };
+/* ================================================================ 攻撃 ===== */
+const ATTACKS = ['charge', 'slam', 'shockwave', 'aoe', 'roar', 'fireball', 'breath'];
+const ATTACK_LABEL = { charge: '突進', slam: '叩きつけ', shockwave: '衝撃波', aoe: 'AoE', roar: '咆哮', fireball: '火球', breath: 'ブレス' };
 
 /** 攻撃ごとの既定タイミング（ms、距離はシーン単位、速度は単位/秒） */
 const DEFAULT_ATTACK_PARAMS = {
   charge: { turnMs: 300, windupMs: 900, runMs: 550, startDistance: 11 },
   slam: { raiseMs: 500, holdMs: 450, swingMs: 280 },
   shockwave: { windupMs: 700, speed: 10, distance: 7 },
-  aoe: { castMs: 500, delayMs: 1500 },
+  aoe: { castMs: 500, delayMs: 1500, blinkMs: 100 },
   roar: { glowMs: 250 },
+  fireball: { windupMs: 700, flightMs: 300 },
+  breath: { windupMs: 800, startAngleDeg: 70, speedDps: 100, direction: 'right' },
 };
+/** ブレスの扇の半角（度）。接触時刻は扇の先端の縁がプレイヤーの方向に達した瞬間 */
+const BREATH_HALF_WIDTH_DEG = 8;
 
 /**
  * 攻撃のタイミング。W（予兆の開始＝予備動作を初めて描画したフレーム）からの相対時刻 ms。
@@ -703,18 +643,33 @@ function attackTiming(type, p) {
     case 'slam':
       return { type, lead: p.raiseMs + p.holdMs + p.swingMs, events: { raiseEnd: p.raiseMs, swingStart: p.raiseMs + p.holdMs }, params: { ...p } };
     case 'shockwave': {
-      const travel = (p.distance / p.speed) * 1000; // d / v
+      const travel = (p.distance / p.speed) * 1000;
       return { type, lead: p.windupMs + travel, events: { emit: p.windupMs, travel }, params: { ...p } };
     }
     case 'aoe':
       return { type, lead: p.castMs + p.delayMs, events: { aoeShow: p.castMs }, params: { ...p } };
     case 'roar':
-      return { type, lead: p.glowMs, events: { glow: 0 }, params: { ...p } };
+      return { type, lead: p.glowMs, events: {}, params: { ...p } };
+    case 'fireball':
+      return { type, lead: p.windupMs + p.flightMs, events: { launch: p.windupMs }, params: { ...p } };
+    case 'breath': {
+      const reach = (p.startAngleDeg / p.speedDps) * 1000;                                   // 先端の縁がプレイヤーに届くまで
+      const sweep = ((2 * p.startAngleDeg + 2 * BREATH_HALF_WIDTH_DEG) / p.speedDps) * 1000; // 薙ぎ払い全体
+      return { type, lead: p.windupMs + reach, events: { sweepStart: p.windupMs, sweepEnd: p.windupMs + sweep }, params: { ...p } };
+    }
     default: throw new Error('unknown attack ' + type);
   }
 }
 /** 衝撃波の波面半径 r(t) = v (t − t0)。t0 = 発生時刻（W + windup）。H = t0 + d/v。 */
 function shockRadius(t, t0, speed) { return t < t0 ? null : (speed / 1000) * (t - t0); }
+/** ブレスの薙ぎ払い方向の符号。'right'：画面の右から左へ（角度は正から負へ） */
+const breathDir = (p) => (p.direction === 'left' ? 1 : -1);
+/** ブレス：扇の中心の向き（度、0 = プレイヤー方向、正 = 画面右）。先端の縁は中心 + dir × 半角 */
+function breathAngle(t, sweepStartAbs, p) {
+  const dir = breathDir(p);
+  const lead = -dir * p.startAngleDeg + dir * p.speedDps * Math.max(0, t - sweepStartAbs) / 1000;
+  return lead - dir * BREATH_HALF_WIDTH_DEG;
+}
 /** 突進：敵の前面の位置（プレイヤーからの距離）。runStart で startDistance、H で 0。 */
 function chargeDistance(t, runStartAbs, H, startDistance) {
   if (t <= runStartAbs) return startDistance;
@@ -724,7 +679,7 @@ function chargeDistance(t, runStartAbs, H, startDistance) {
 
 /* --------------------------------------------------------- 試行計画 --- */
 /**
- * mode 'individual'：1 種類の攻撃を繰り返す。mode 'mixed'：5 種類を均衡ブロックでランダム順に提示。
+ * mode 'individual'：1 種類の攻撃を繰り返す。mode 'mixed'：全種類を均衡ブロックでランダム順に提示。
  * 混合では各ブロック（blockSize 試行）に各攻撃が同数ずつ入り、同じ攻撃は 2 回までしか連続しない。
  */
 function buildPlan(cfg, seed) {
@@ -775,7 +730,7 @@ function buildPlan(cfg, seed) {
 function createTrialRunner(cfg) {
   const st = cfg.settings, item = cfg.item;
   const timing = attackTiming(item.attack, st.attacks[item.attack]);
-  const r = { phase: 'init', S: null, Wsched: null, W: null, H: null, obsEnd: null, impactFrame: null, firstInput: null, ignored: 0, frames: [], lastTs: null, aborted: null, done: false, warnFrameInterval: null };
+  const r = { phase: 'init', S: null, Wsched: null, W: null, H: null, obsEnd: null, impactFrame: null, firstInput: null, ignored: 0, frames: [], lastTs: null, aborted: null, done: false };
   function start(ts) { r.phase = 'ready'; r.S = ts; r.lastTs = ts; r.Wsched = ts + item.foreperiod_ms; }
   function frame(ts) {
     if (r.done || r.aborted || r.phase === 'init') return;
@@ -783,7 +738,7 @@ function createTrialRunner(cfg) {
     if (dt > 0) r.frames.push(dt);
     r.lastTs = ts;
     if (r.phase === 'ready' && ts >= r.Wsched) {
-      r.W = ts; r.warnFrameInterval = dt; r.H = r.W + timing.lead; r.obsEnd = r.H + st.obsAfter; r.phase = 'attack';
+      r.W = ts; r.H = r.W + timing.lead; r.obsEnd = r.H + st.obsAfter; r.phase = 'attack';
     }
     if (r.phase === 'attack' && ts >= r.H) { r.impactFrame = ts; r.phase = 'post'; }
     if (r.phase === 'post' && ts >= r.obsEnd) { r.phase = 'done'; r.done = true; }
@@ -794,8 +749,8 @@ function createTrialRunner(cfg) {
     r.firstInput = info; return true;
   }
   function abort(reason, ts) { if (!r.done && !r.aborted) r.aborted = { reason, ts }; }
-  function view(ts) {
-    return { attack: item.attack, phase: r.phase, ts, S: r.S, W: r.W, H: r.H, timing, inputAt: r.firstInput ? r.firstInput.handlerTs : null, impactAt: r.impactFrame };
+  function view() {
+    return { attack: item.attack, phase: r.phase, W: r.W, H: r.H, timing, inputAt: r.firstInput ? r.firstInput.handlerTs : null, impactAt: r.impactFrame };
   }
   function result(extra = {}) {
     const toRel = cfg.toRel || ((t) => t);
@@ -842,9 +797,9 @@ function createTrialRunner(cfg) {
 
 /* -------------------------------------------------------- 解析用の行 --- */
 /** 攻撃 1 種類の推定用データ。a = 観測開始 − H（左側の切断）、c = 観測終了 − H（右打ち切り）。 */
-function rowsFor(trials, attack, opts = {}) {
-  return trials.filter((t) => t.attack_type === attack && t.status === 'completed' && (opts.includePractice ? !/aborted|device_mismatch|frame_drop/.test(t.invalid_reason || '') : t.valid_for_fit))
-    .map((t) => ({ e: t.is_censored ? null : t.input_error_ms, a: t.observation_start_ms - t.attack_impact_time_ms, c: t.observation_end_ms - t.attack_impact_time_ms, id: t.trial_id, idx: t.trial_index }));
+function rowsFor(trials, attack) {
+  return trials.filter((t) => t.attack_type === attack && t.status === 'completed' && t.valid_for_fit)
+    .map((t) => ({ e: t.is_censored ? null : t.input_error_ms, a: t.observation_start_ms - t.attack_impact_time_ms, c: t.observation_end_ms - t.attack_impact_time_ms, id: t.trial_id }));
 }
 
 /* ------------------------------------------------------------ 記述統計 --- */
@@ -884,7 +839,8 @@ function qqPoints(a, mu, sigma) {
 function fitNormalAttack(rows) {
   const obs = rows.filter((r) => r.e !== null).map((r) => r.e);
   const n = obs.length;
-  const simple = n ? { mu: mean(obs), sigma: n > 0 ? Math.sqrt(obs.reduce((s, v) => s + (v - mean(obs)) ** 2, 0) / n) : NaN, sdUnbiased: sd(obs), n } : null;
+  const m = mean(obs);
+  const simple = n ? { mu: m, sigma: Math.sqrt(obs.reduce((s, v) => s + (v - m) ** 2, 0) / n), sdUnbiased: sd(obs), n } : null;
   const mle = rows.length ? fitPredictive(rows) : { ok: false, warnings: ['データがありません。'] };
   const d = n ? describe(obs) : null;
   return {
@@ -911,8 +867,6 @@ function conditionalOutcomeProbs(mu, sigma, rows, J, D) {
   for (const k in acc) acc[k] /= rows.length || 1;
   return acc;
 }
-/** σ 一定で平均だけ動かしたときの P_Just の最大化（対称な受付区間なら μ = −J/2） */
-function optimalMu(sigma, J) { return -J / 2; }
 
 /* ------------------------------------------------------- 正規乱数の検査 --- */
 function normalRngCheck(rng, n) {
@@ -931,11 +885,10 @@ const CSV_COLUMNS = [
   'observation_start_ms', 'observation_end_ms', 'input_device', 'input_event_timestamp_ms', 'input_handler_timestamp_ms',
   'just_window_ms', 'invincible_window_ms', 'attack_parameter_json', 'estimated_fps', 'frame_p95_ms', 'frame_max_ms',
   'focus_lost', 'timestamp_utc',
-  // 追加列
   'status', 'block_index', 'trial_index', 'attack_warning_scheduled_ms', 'impact_frame_time_ms', 'warning_frame_delay_ms', 'impact_frame_delay_ms',
   'warning_lead_ms', 'foreperiod_ms', 'pre_warning_input', 'input_after_observation', 'input_time_source', 'input_code',
   'ignored_input_count', 'frame_mean_ms', 'frame_sd_ms', 'frame_drop_warning', 'feedback_enabled', 'random_seed', 'retry_of',
-  'timing_key', 'render_mode', 'clock_note',
+  'timing_key', 'render_mode', 'clock_note', 'fps_limit',
 ];
 function csvCell(v) {
   if (v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v))) return '';
@@ -950,7 +903,6 @@ function toCSV(trials) {
 }
 /** 標準の固定タイミング条件を区別するキー（攻撃種類＋その攻撃のタイミング設定） */
 function timingKey(attack, params) { return attack + ':' + JSON.stringify(params); }
-
 
 /* ------------------------------------------------------- 自動テスト --- */
 function runCoreTests() {
@@ -1003,20 +955,20 @@ function runCoreTests() {
   const run = (attack, fps, inputs, jitter = 0) => {
     const item = { trial_id: attack + '-1', attack, is_practice: false, block_index: 1, index_in_attack: 1, foreperiod_ms: 1234 };
     const tr = createTrialRunner({ item, settings });
-    let t = 1000; tr.start(t); const pending = inputs.slice(); let k = 0; const views = [];
+    let t = 1000; tr.start(t); const pending = inputs.slice(); let k = 0;
     while (!tr.state.done && k++ < 100000) {
       t += 1000 / fps + (jitter ? (rng.random() - 0.5) * jitter : 0);
       while (pending.length && pending[0](tr.state) !== null && pending[0](tr.state) <= t) { const at = pending.shift()(tr.state); tr.input({ time: at, eventTs: at, handlerTs: t, device: 'keyboard', code: 'Space', source: 'event' }); }
-      tr.frame(t); views.push(tr.view(t));
+      tr.frame(t);
     }
-    return { tr, res: tr.result({ mode: 'individual' }), views };
+    return { tr, res: tr.result({ mode: 'individual' }) };
   };
   T('5. 接触時刻と入力誤差の計算（e = T − H）', () => {
     const { tr, res } = run('aoe', 60, [(s) => (s.H ? s.H - 120 : null)]);
     const lead = attackTiming('aoe', settings.attacks.aoe).lead;
     return { pass: close(res.input_error_ms, -120, 1e-9) && close(tr.state.H - tr.state.W, lead, 1e-9) && res.outcome === 'just' && close(res.input_error_ms, res.input_time_ms - res.attack_impact_time_ms, 1e-9), detail: `e ${res.input_error_ms} lead ${lead}` };
   });
-  T('6. 5 種類の攻撃のデータが混ざらない', () => {
+  T('6. 攻撃の種類ごとのデータが混ざらない', () => {
     const trials = [];
     for (const a of ATTACKS) for (let i = 0; i < 4; i++) { const r = run(a, 60, [(s) => (s.H ? s.H - 50 - i : null)]).res; trials.push({ ...r, trial_id: `${a}-${i}` }); }
     const ok = ATTACKS.every((a) => { const rows = rowsFor(trials, a); return rows.length === 4 && rows.every((r) => r.id.startsWith(a)); });
@@ -1025,12 +977,13 @@ function runCoreTests() {
   T('7. FPS が変わっても理論接触時刻（H − W）が同じ・描画モデルと一致', () => {
     const det = []; let ok = true;
     for (const a of ATTACKS) for (const [fps, jit] of [[30, 0], [60, 0], [144, 0], [60, 14]]) {
-      const { tr, views } = run(a, fps, [], jit);
+      const { tr } = run(a, fps, [], jit);
       const s = tr.state, tm = tr.timing;
       if (!close(s.H - s.W, tm.lead, 1e-9)) ok = false;
-      // 描画モデル：衝撃波は H で d に、突進は H で距離 0 に
+      // 描画モデル：H で衝撃波は d に、突進は距離 0 に、ブレスは先端の縁が 0° に
       if (a === 'shockwave') { const r = shockRadius(s.H, s.W + tm.events.emit, tm.params.speed); if (!close(r, tm.params.distance, 1e-9)) ok = false; }
       if (a === 'charge') { if (!close(chargeDistance(s.H, s.W + tm.events.runStart, s.H, tm.params.startDistance), 0, 1e-12)) ok = false; }
+      if (a === 'breath') { const c = breathAngle(s.H, s.W + tm.events.sweepStart, tm.params); if (!close(c + breathDir(tm.params) * BREATH_HALF_WIDTH_DEG, 0, 1e-9)) ok = false; }
       if (s.impactFrame < s.H || s.impactFrame - s.H > 1000 / fps + 8) ok = false;
       if (fps === 60 && !jit) det.push(`${a} ${tm.lead.toFixed(0)}ms`);
     }
@@ -1045,7 +998,7 @@ function runCoreTests() {
     const tr = createTrialRunner({ item, settings }); let t = 0; tr.start(t);
     while (!tr.state.done) { t += 16.7; if (tr.state.H && !tr.state.firstInput && t > tr.state.H - 80) tr.input({ time: t, eventTs: t, handlerTs: t, device: 'keyboard', code: 'Space', source: 'event' }); tr.frame(t); }
     const res = tr.result({});
-    return { pass: !res.valid_for_fit && /practice/.test(res.invalid_reason) && rowsFor([res], 'roar').length === 0 && rowsFor([res], 'roar', { includePractice: true }).length === 1, detail: res.invalid_reason };
+    return { pass: !res.valid_for_fit && /practice/.test(res.invalid_reason) && res.status === 'completed' && res.input_error_ms !== null && rowsFor([res], 'roar').length === 0, detail: res.invalid_reason };
   });
   T('無入力は右打ち切り（誤差0にしない）・観測終了時刻あり', () => {
     const { res } = run('charge', 60, []);
@@ -1079,8 +1032,15 @@ function runCoreTests() {
     const main = p1.queue.filter((q) => !q.is_practice);
     const counts = ATTACKS.map((a) => main.filter((q) => q.attack === a).length);
     let run3 = false; for (let i = 2; i < p1.queue.length; i++) if (p1.queue[i].attack === p1.queue[i - 1].attack && p1.queue[i].attack === p1.queue[i - 2].attack) run3 = true;
-    const perBlock = [...new Set(main.map((q) => q.block_index))].map((b) => ATTACKS.map((a) => main.filter((q) => q.block_index === b && q.attack === a).length).join(''));
-    return { pass: counts.every((c) => c === 50) && !run3 && JSON.stringify(p1) === JSON.stringify(p2) && perBlock.every((s) => s === '55555') && p1.queue.filter((q) => q.is_practice).length === 10, detail: `counts ${counts.join('/')} blocks ${perBlock.length}` };
+    const perBlock = [...new Set(main.map((q) => q.block_index))].map((b) => ATTACKS.map((a) => main.filter((q) => q.block_index === b && q.attack === a).length));
+    const balanced = perBlock.every((c) => c.every((x) => x === c[0]));
+    return { pass: counts.every((c) => c === 50) && !run3 && JSON.stringify(p1) === JSON.stringify(p2) && balanced && p1.queue.filter((q) => q.is_practice).length === 10, detail: `counts ${counts.join('/')} blocks ${perBlock.length}` };
+  });
+  T('ブレス：固定の速度・向き（右 = 画面の右から左）で接触時刻が決まる', () => {
+    const p = DEFAULT_ATTACK_PARAMS.breath, tm = attackTiming('breath', p);
+    const start = breathAngle(0, 0, p) + breathDir(p) * BREATH_HALF_WIDTH_DEG, left = breathDir({ ...p, direction: 'left' });
+    return { pass: p.direction === 'right' && p.speedDps === 100 && start === p.startAngleDeg && left === 1 && close(tm.lead, p.windupMs + p.startAngleDeg / p.speedDps * 1000, 1e-9),
+      detail: `lead ${tm.lead.toFixed(0)} ms、先端の開始角 ${start}°` };
   });
   T('偏りの統計量（歪度・外れ値・Q-Q）', () => {
     const xs = Array.from({ length: 4000 }, () => rng.normal());
@@ -1100,16 +1060,10 @@ function runCoreTests() {
 
 
 return {
-  VERSION, ATTACKS, ATTACK_LABEL, DEFAULT_ATTACK_PARAMS,
-  makeRng, hashSeed, shuffleInPlace,
-  normCdf, normSf, normPdf, logNormCdf, logNormSf, normQuantile,
-  makePred, predLogPdf, predLogSf, predCdf, predSample, predNegLL,
-  classify, outcomeProbs, minimize, hessian, invertMatrix,
-  mean, sd, quantile, quantileSorted, describe, frameStats, trendCheck, movingAverage, pearson, ksUniform, adUniform,
-  fitPredictive, simulatePredRows, fitNormalAttack, normalOutcomeProbs, pJust, conditionalOutcomeProbs, optimalMu,
-  skewness, excessKurtosis, outlierInfo, qqPoints, normalRngCheck,
-  attackTiming, shockRadius, chargeDistance, buildPlan, stratifiedSequence, createTrialRunner, rowsFor,
-  CSV_COLUMNS, toCSV, timingKey, runCoreTests,
+  ATTACKS, ATTACK_LABEL, DEFAULT_ATTACK_PARAMS,
+  makeRng, normCdf, normPdf, classify, mean, quantileSorted, frameStats, trendCheck, movingAverage,
+  fitPredictive, simulatePredRows, fitNormalAttack, normalOutcomeProbs, pJust, conditionalOutcomeProbs, qqPoints,
+  attackTiming, shockRadius, chargeDistance, breathAngle, BREATH_HALF_WIDTH_DEG, buildPlan, createTrialRunner, rowsFor, toCSV, timingKey, runCoreTests,
 };
 })();
 
@@ -1155,92 +1109,181 @@ async function createScene3D(container, opts) {
   const blob = new THREE.Mesh(new THREE.CircleGeometry(0.7, 40), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.006; scene.add(blob);
 
-  /* ---- プレイヤー ---- */
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1c2740, roughness: 0.45, metalness: 0.55 });
-  const armorMat = new THREE.MeshStandardMaterial({ color: 0x33496f, roughness: 0.35, metalness: 0.7, emissive: 0x06202e, emissiveIntensity: 0.6 });
-  const glowMat = new THREE.MeshStandardMaterial({ color: 0x8ff4ff, emissive: 0x3fe6ff, emissiveIntensity: 2.2 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9c6b6, roughness: 0.7 });
-  const hairMat = new THREE.MeshStandardMaterial({ color: 0x15161c, roughness: 0.6 });
-  function limb(len, r, mat) { const pivot = new THREE.Group(); const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat); m.position.y = -len / 2 - r * 0.2; m.castShadow = true; pivot.add(m); return pivot; }
-  function buildHuman(mo) {
-    const M = (m) => mo || m;
-    const root = new THREE.Group();
-    const hips = new THREE.Group(); hips.position.y = 0.95; root.add(hips);
-    const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.18, 0.22), M(bodyMat)); pelvis.castShadow = true; hips.add(pelvis);
-    const spine = new THREE.Group(); spine.position.y = 0.08; hips.add(spine);
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 6, 14), M(bodyMat)); torso.position.y = 0.3; torso.castShadow = true; spine.add(torso);
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.26, 0.28), M(armorMat)); chest.position.y = 0.42; chest.castShadow = true; spine.add(chest);
-    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 0.55, 14, 1, true), M(armorMat)); coat.position.y = -0.12; coat.castShadow = true; hips.add(coat);
-    const neck = new THREE.Group(); neck.position.y = 0.62; spine.add(neck);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), M(skinMat)); head.position.y = 0.15; head.castShadow = true; neck.add(head);
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.162, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), M(hairMat)); hair.position.y = 0.17; hair.rotation.x = 0.25; neck.add(hair);
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.03), M(glowMat)); visor.position.set(0, 0.17, -0.14); neck.add(visor);
-    const mk = (side) => {
-      const sh = new THREE.Group(); sh.position.set(0.27 * side, 0.5, 0); spine.add(sh);
-      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), M(armorMat)); pad.castShadow = true; sh.add(pad);
-      const upper = limb(0.26, 0.065, M(bodyMat)); sh.add(upper);
-      const elbow = new THREE.Group(); elbow.position.y = -0.36; upper.add(elbow); elbow.add(limb(0.24, 0.058, M(armorMat)));
-      const hip = new THREE.Group(); hip.position.set(0.11 * side, -0.06, 0); hips.add(hip);
-      const thigh = limb(0.34, 0.085, M(bodyMat)); hip.add(thigh);
-      const knee = new THREE.Group(); knee.position.y = -0.46; thigh.add(knee); knee.add(limb(0.32, 0.072, M(armorMat)));
-      return { sh, elbow, hip, knee };
-    };
-    const L = mk(-1), R = mk(1);
-    const sword = new THREE.Group(); sword.position.set(0.05, 0.45, 0.17); sword.rotation.z = 0.6; spine.add(sword);
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.9, 0.015), M(glowMat)); blade.position.y = 0.2; sword.add(blade);
-    root.userData = { hips, spine, neck, L, R };
+  /* ---- プレイヤー（低ポリ。残像は主要パーツのみ） ---- */
+  const characterSize = 0.595;
+  const colors = {
+    pink: 0xec578c, pinkLight: 0xf57da7, pinkDark: 0x963959,
+    hat: 0xf6cc4b, hatLight: 0xffed9f, hair: 0x61463c,
+    skin: 0xf5c9b4, dark: 0x30333f, darkLight: 0x626674,
+    gray: 0x999baa, cyan: 0x7ad9f5
+  };
+  const charMat = {};
+  for (const [name, color] of Object.entries(colors)) {
+    charMat[name] = new THREE.MeshStandardMaterial({ color, roughness: 0.84, flatShading: true });
+  }
+  const characterGeo = {
+    box: new THREE.BoxGeometry(1, 1, 1),
+    oct: new THREE.OctahedronGeometry(1, 0),
+    tetra: new THREE.TetrahedronGeometry(1, 0),
+  };
+  // 厚みのない板（2 三角形）
+  function quadGeometry(coords) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(coords, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  const wingGeo = quadGeometry([
+     0.14,  0.22, 0,   1.13,  0.35, 0,   0.54, -0.13, 0,
+     0.14,  0.22, 0,   0.54, -0.13, 0,   0.40, -0.22, 0
+  ]);
+  const backBandGeo = quadGeometry([
+    -0.36, -0.03, 0,  0.36, -0.03, 0,  0.36, 0.03, 0,
+    -0.36, -0.03, 0,  0.36, 0.03, 0, -0.36, 0.03, 0
+  ]);
+  const backPocketGeo = quadGeometry([
+    -0.21, -0.12, 0,  0.21, -0.12, 0,  0.21, 0.12, 0,
+    -0.21, -0.12, 0,  0.21, 0.12, 0, -0.21, 0.12, 0
+  ]);
+  const brimGeo = quadGeometry([
+    -0.53, 0, -0.33, 0.53, 0, -0.33, 0.53, 0, 0.47,
+    -0.53, 0, -0.33, 0.53, 0, 0.47, -0.53, 0, 0.47
+  ]);
+  const panelMaterial = {
+    dark: new THREE.MeshBasicMaterial({ color: colors.darkLight, side: THREE.DoubleSide }),
+    pocket: new THREE.MeshBasicMaterial({ color: colors.pinkDark, side: THREE.DoubleSide }),
+    hat: new THREE.MeshBasicMaterial({ color: colors.hatLight, side: THREE.DoubleSide }),
+    wing: new THREE.MeshBasicMaterial({ color: colors.cyan, side: THREE.DoubleSide })
+  };
+
+  function detail(parent, geometry, material, at, size, rz = 0) {
+    const part = new THREE.Mesh(characterGeo[geometry], material);
+    part.position.set(...at); part.scale.set(...size); part.rotation.z = rz;
+    part.castShadow = true; parent.add(part);
+    return part;
+  }
+  function panel(parent, geo, material, at, scaleX = 1) {
+    const part = new THREE.Mesh(geo, material);
+    part.position.set(...at); part.scale.x = scaleX;
+    parent.add(part); return part;
+  }
+  function buildHuman(ghostMaterial = null) {
+    const ghost = ghostMaterial !== null;
+    const m = (name) => ghostMaterial || charMat[name];
+    const pm = (name) => ghostMaterial || panelMaterial[name];
+    const root = new THREE.Group(); root.scale.setScalar(characterSize);
+    const hips = new THREE.Group(); hips.position.y = 0.91; root.add(hips);
+    const spine = new THREE.Group(); hips.add(spine);
+    const neck = new THREE.Group(); neck.position.y = 0.86; spine.add(neck);
+    const arms = [], legs = [];
+
+    // 胴
+    detail(spine, 'box', m('pink'), [0, 0.37, 0], [0.82, 0.78, 0.60]);
+    if (!ghost) {
+      detail(spine, 'oct', m('pinkLight'), [0, -0.08, 0], [0.98, 0.27, 0.69]);
+      panel(spine, backBandGeo, pm('dark'), [0, 0.30, -0.311]);
+      panel(spine, backPocketGeo, pm('pocket'), [0, 0.51, -0.313]);
+    }
+
+    // 頭部
+    detail(neck, 'oct', m('hair'), [0, 0.24, -0.04], [0.55, 0.47, 0.44]);
+    if (!ghost) {
+      detail(neck, 'oct', m('skin'), [0, 0.19, 0.15], [0.42, 0.33, 0.32]);
+      for (const side of [-1, 1]) {
+        detail(neck, 'tetra', m('hair'), [side * 0.37, -0.045, -0.11], [0.18, 0.27, 0.22]);
+      }
+    }
+    detail(neck, 'oct', m('hat'), [0, 0.60, -0.02], [0.60, 0.30, 0.49]);
+    if (!ghost) panel(neck, brimGeo, pm('hat'), [0, 0.44, 0.11]);
+    for (const side of [-1, 1]) {
+      detail(neck, 'tetra', m('hat'), [side * 0.42, 0.86, -0.05], [0.23, 0.29, 0.22], -side * 0.16);
+    }
+
+    // 翼
+    const wings = new THREE.Group(); wings.position.set(0, 0.45, -0.39); spine.add(wings);
+    for (const side of [-1, 1]) panel(wings, wingGeo, pm('wing'), [0, 0, 0], side);
+
+    // 腕
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Group(); shoulder.position.set(side * 0.47, 0.63, 0); spine.add(shoulder);
+      detail(shoulder, 'tetra', m('pink'), [side * 0.04, -0.25, 0], [0.28, 0.42, 0.30]);
+      const elbow = new THREE.Group(); elbow.position.set(side * 0.09, -0.45, 0); shoulder.add(elbow);
+      if (!ghost) detail(elbow, 'tetra', m('dark'), [0, -0.22, 0], [0.21, 0.28, 0.19]);
+      arms.push({ shoulder, elbow });
+    }
+    // 脚
+    for (const side of [-1, 1]) {
+      const hip = new THREE.Group(); hip.position.set(side * 0.24, -0.04, 0); hips.add(hip);
+      detail(hip, 'tetra', m('dark'), [0, -0.27, 0], [0.23, 0.44, 0.24]);
+      const knee = new THREE.Group(); knee.position.set(0, -0.51, 0); hip.add(knee);
+      if (!ghost) {
+        detail(knee, 'tetra', m('darkLight'), [0, -0.22, 0], [0.19, 0.34, 0.20]);
+        detail(knee, 'tetra', m('dark'), [0, -0.47, 0.12], [0.23, 0.16, 0.31]);
+      }
+      legs.push({ hip, knee });
+    }
+    // 武器
+    if (!ghost) {
+      const gun = new THREE.Group(); gun.position.set(-0.10, -0.33, 0.04);
+      gun.rotation.z = 0.20; arms[0].elbow.add(gun);
+      detail(gun, 'tetra', m('dark'), [0, 0.33, 0], [0.18, 0.86, 0.19]);
+      detail(gun, 'tetra', m('gray'), [0, 0.88, 0], [0.09, 0.49, 0.12]);
+    }
+    root.userData = { hips, spine, neck, arms, legs, wings, mat: ghostMaterial };
     return root;
   }
-  const player = buildHuman(null); scene.add(player);
+  const player = buildHuman(); scene.add(player);
+  blob.scale.setScalar(characterSize);
   const ghosts = [];
   for (let i = 0; i < 5; i++) {
-    const mat = new THREE.MeshBasicMaterial({ color: 0x46e8ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const g = buildHuman(mat); g.traverse((o) => { o.castShadow = false; }); g.visible = false; g.userData.mat = mat; scene.add(g); ghosts.push(g);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x48dfff, transparent: true,
+      opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide });
+    const g = buildHuman(mat);
+    g.traverse((obj) => { if (obj.isMesh) obj.castShadow = false; });
+    g.visible = false; scene.add(g); ghosts.push(g);
   }
   function poseHuman(h, t, s) {
     const u = h.userData;
-    u.hips.position.y = 0.95 - s.crouch * 0.18 + Math.sin(t * 2.1) * 0.012;
-    u.spine.rotation.x = 0.08 + s.crouch * 0.25 + s.lean; u.spine.rotation.z = s.tilt; u.neck.rotation.x = -0.1 - s.crouch * 0.15;
-    for (const [side, P] of [[-1, u.L], [1, u.R]]) {
-      P.sh.rotation.x = -0.25 + Math.sin(t * 1.3 + side) * 0.04 - s.arms * 0.6; P.sh.rotation.z = side * (0.18 + s.arms * 0.5);
-      P.elbow.rotation.x = -0.5 - s.arms * 0.6;
-      P.hip.rotation.x = -0.12 - s.crouch * 0.5 + (side > 0 ? s.stride : -s.stride); P.hip.rotation.z = side * 0.08;
-      P.knee.rotation.x = 0.25 + s.crouch * 0.9;
+    const moving = Math.min(1, Math.abs(s.stride) * 1.5);
+    u.hips.position.y = 0.91 - 0.22 * s.crouch + 0.035 * Math.sin(t * 23) * moving;
+    u.spine.rotation.x = s.crouch * 0.12 + s.lean * 0.6;
+    u.spine.rotation.z = s.tilt;
+    u.neck.rotation.z = -s.tilt * 0.28;
+    u.neck.rotation.x = -s.crouch * 0.08;
+    for (let i = 0; i < 2; i++) {
+      const side = i ? 1 : -1;
+      u.arms[i].shoulder.rotation.x = -0.14 + side * s.arms * 1.35;
+      u.arms[i].shoulder.rotation.z = side * (0.12 + 0.50 * s.arms);
+      u.arms[i].elbow.rotation.x = -0.13 - s.arms * 0.50;
+      u.legs[i].hip.rotation.x = side * 0.95 * s.stride - 0.24 * s.crouch;
+      u.legs[i].hip.rotation.z = side * (0.04 + 0.13 * s.stride);
+      u.legs[i].knee.rotation.x = 0.20 + Math.max(0, -side * s.stride) * 0.85 + s.crouch * 0.72;
     }
+    u.wings.rotation.x = 0.10 + moving * 0.22;
   }
 
-  /* ---- 敵（大槌を持つ巨兵） ---- */
+  /* ---- 敵（箱型の胴＋頭＋大槌） ---- */
   const SWING_PIVOT = new THREE.Vector3(0, 2.6, 0.4), HAMMER_LEN = 3.3;
   const PHI_SLAM = -Math.acos((SWING_PIVOT.y - 0.45) / HAMMER_LEN);
   const SLAM_REACH = SWING_PIVOT.z + HAMMER_LEN * Math.sin(-PHI_SLAM);   // 敵の位置から槌の着地点までの前方距離
-  const PHI_RAISED = Math.PI - 0.62, PHI_REST = -0.25, PHI_SLAM2 = PHI_SLAM + Math.PI * 2, PHI_REST2 = PHI_REST + Math.PI * 2;
+  // 待機時は大槌を背後に下ろし、叩きつけ後は頭上を通って戻す
+  const PHI_RAISED = Math.PI - 0.62, PHI_REST = 0.95, PHI_SLAM2 = PHI_SLAM + Math.PI * 2;
   const enemy = new THREE.Group(); scene.add(enemy);
-  const eMat = new THREE.MeshStandardMaterial({ color: 0x241a24, roughness: 0.55, metalness: 0.6, emissive: 0x000000 });
-  const eArmor = new THREE.MeshStandardMaterial({ color: 0x3b2430, roughness: 0.4, metalness: 0.7, emissive: 0x000000 });
-  const eCoreMat = new THREE.MeshStandardMaterial({ color: 0xff8a3d, emissive: 0xff4a12, emissiveIntensity: 1.2 });
-  const eHeadGlow = new THREE.MeshStandardMaterial({ color: 0x5a2a2a, emissive: 0xff3a1a, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.5 });
+  const eMat = new THREE.MeshStandardMaterial({ color: 0x4a2f3a, roughness: 0.6, metalness: 0.2, emissive: 0x000000 });
+  const eHeadGlow = new THREE.MeshStandardMaterial({ color: 0x6a3030, emissive: 0xff3a1a, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0.3 });
   const eTorso = new THREE.Group(); eTorso.position.y = 1.4; enemy.add(eTorso);
-  const eBody = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.5, 1.1), eArmor); eBody.position.y = 0.7; eBody.castShadow = true; eTorso.add(eBody);
-  const eBelly = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.75, 0.8, 8), eMat); eBelly.position.y = -0.3; eBelly.castShadow = true; eTorso.add(eBelly);
-  const eNeck = new THREE.Group(); eNeck.position.y = 1.5; eTorso.add(eNeck);
-  const eHead = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), eArmor); eHead.position.y = 0.3; eHead.castShadow = true; eNeck.add(eHead);
-  const eEye = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.05), eCoreMat); eEye.position.set(0, 0.36, 0.38); eNeck.add(eEye);
-  const eJaw = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.4), eMat); eJaw.position.set(0, 0.0, 0.14); eNeck.add(eJaw);
-  const eMouth = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.02, 0.05), eCoreMat); eMouth.position.set(0, 0.1, 0.36); eNeck.add(eMouth);
-  const eCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), eCoreMat); eCore.position.set(0, 0.75, 0.58); eTorso.add(eCore);
+  const eBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.9, 1.0), eMat); eBody.position.y = 0.45; eBody.castShadow = true; eTorso.add(eBody);
+  const eNeck = new THREE.Group(); eNeck.position.y = 1.45; eTorso.add(eNeck);
+  const eHead = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.7), eMat); eHead.position.y = 0.3; eHead.castShadow = true; eNeck.add(eHead);
   const eLegs = [];
   for (const side of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(0.5 * side, 1.1, 0); enemy.add(hip);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.6), eMat); leg.position.y = -0.55; leg.castShadow = true; hip.add(leg); eLegs.push(hip);
-    const pad = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), eArmor); pad.position.set(1.0 * side, 1.15, 0); pad.castShadow = true; eTorso.add(pad);
+    const hip = new THREE.Group(); hip.position.set(0.42 * side, 1.1, 0); enemy.add(hip);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.55), eMat); leg.position.y = -0.55; leg.castShadow = true; hip.add(leg); eLegs.push(hip);
   }
   const swing = new THREE.Group(); swing.position.copy(SWING_PIVOT); enemy.add(swing);
-  for (const side of [-1, 1]) { const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.3, 0.45), eMat); arm.position.set(0.55 * side, -0.6, 0); arm.rotation.z = -side * 0.35; arm.castShadow = true; swing.add(arm); }
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 2.6, 10), eArmor); handle.position.y = -2.1; handle.castShadow = true; swing.add(handle);
-  const hammer = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 0.9), eHeadGlow); hammer.position.y = -HAMMER_LEN; hammer.castShadow = true; swing.add(hammer);
-  const hammerBand = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.12, 0.92), eCoreMat); hammerBand.position.y = -HAMMER_LEN; swing.add(hammerBand);
-  const eLight = new THREE.PointLight(0xff5a1e, 0, 14, 2); eLight.position.set(0, 2.2, 1.2); enemy.add(eLight);
-  const redLight = new THREE.PointLight(0xff1020, 0, 12, 2); redLight.position.set(0, 2.6, 1.0); enemy.add(redLight);
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, HAMMER_LEN - 0.5, 10), eMat); handle.position.y = -(HAMMER_LEN + 0.5) / 2; handle.castShadow = true; swing.add(handle);
+  const hammer = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.9, 0.9), eHeadGlow); hammer.position.y = -HAMMER_LEN; hammer.castShadow = true; swing.add(hammer);
 
   /* ---- 汎用エフェクト ---- */
   const radTex = (stops) => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); stops.forEach(([o, col]) => g.addColorStop(o, col)); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); };
@@ -1317,10 +1360,10 @@ async function createScene3D(container, opts) {
   /* ---- AoE（足元の危険範囲と爆発） ---- */
   const AOE_R = 2.2;
   const aoeMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms: { uAlpha: { value: 0 }, uTime: { value: 0 } },
+    transparent: true, depthWrite: false, uniforms: { uAlpha: { value: 0 } },
     vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
-    // 残り時間を示す縮小・点滅はしない（静止した表示）。細かな揺らぎは非周期的な小さいノイズのみ
-    fragmentShader: `uniform float uAlpha; uniform float uTime; varying vec2 vP; float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    // 残り時間を示す縮小・点滅はしない（静止した表示）
+    fragmentShader: `uniform float uAlpha; varying vec2 vP;
       void main(){ float r = length(vP) / ${AOE_R.toFixed(2)}; if (r > 1.0) discard;
         float rim = smoothstep(0.9, 0.97, r) * (1.0 - smoothstep(0.985, 1.0, r));
         float fill = 0.22 + 0.1 * smoothstep(0.2, 0.9, r);
@@ -1349,6 +1392,24 @@ async function createScene3D(container, opts) {
   const roarRingMat = new THREE.MeshBasicMaterial({ color: 0xffd0d0, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
   const roarRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1.0, 96), roarRingMat); roarRing.rotation.x = -Math.PI / 2; roarRing.position.y = 0.05; scene.add(roarRing);
 
+  /* ---- 火球・ブレス（口から） ---- */
+  const MOUTH_Y = 3.05, MOUTH_FWD = 0.4;
+  const mouthGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })); scene.add(mouthGlow);
+  const fireball = new THREE.Group(); fireball.visible = false; scene.add(fireball);
+  fireball.add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffd27a })));
+  const fireballHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xff7a2a })); fireballHalo.scale.setScalar(1.8); fireball.add(fireballHalo);
+  const breathMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uTime: { value: 0 }, uAlpha: { value: 0 } },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);} `,
+    fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+      void main(){ float n = 0.5 + 0.5 * sin(vUv.x * 37.7 + vUv.y * 23.0 - uTime * 21.0) * sin(vUv.y * 31.0 - uTime * 37.0 + h(vec2(floor(vUv.x * 12.0), 0.0)) * 6.28);
+        float a = (0.55 + 0.45 * n) * smoothstep(0.0, 0.12, vUv.y) * (1.0 - smoothstep(0.8, 1.0, vUv.y));
+        gl_FragColor = vec4(mix(vec3(1.0, 0.95, 0.6), vec3(1.0, 0.3, 0.05), vUv.y), uAlpha * a); }`,
+  });
+  const breathGroup = new THREE.Group(); breathGroup.rotation.order = 'YXZ'; breathGroup.visible = false; scene.add(breathGroup);
+  const breathCone = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.12, 1, 32, 1, true), breathMat);
+  breathCone.rotation.x = Math.PI / 2; breathGroup.add(breathCone);
+
   /* ---- サイズ ---- */
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
@@ -1358,7 +1419,6 @@ async function createScene3D(container, opts) {
 
   /* ---- 描画 ---- */
   const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
-  const easeIn = (x) => { const c = Math.min(1, Math.max(0, x)); return c * c; };
   const clamp01 = (x) => Math.min(1, Math.max(0, x));
   let lastTs = null, shake = 0, lastBurst = null, lastAttack = null;
   const ghostSnaps = [];
@@ -1370,6 +1430,8 @@ async function createScene3D(container, opts) {
       case 'shockwave': return -(p.distance + SLAM_REACH);
       case 'aoe': return -7.5;
       case 'roar': return -6;
+      case 'fireball': return -8;
+      case 'breath': return -6;
       default: return -7;
     }
   };
@@ -1392,10 +1454,10 @@ async function createScene3D(container, opts) {
     const ev = tm ? tm.events : {};
 
     // 敵の既定姿勢
-    let ez = enemyHome(attack, tm), ery = 0, phi = PHI_REST, tilt = 0, drop = 0, legSwing = 0, glowCharge = 0, red = 0, neckUp = 0, jaw = 0;
+    let ez = enemyHome(attack, tm), ery = 0, phi = PHI_REST, tilt = 0, drop = 0, legSwing = 0, glowCharge = 0, red = 0, neckUp = 0;
     let craterAt = null, craterAge = 99, burstKey = null, burstPos = null;
     let showWave = false, R = 0, waveCenterZ = 0, waveFade = 1;
-    let aoeAlpha = 0, fireAge = -1, roarAge = -1;
+    let aoeAlpha = 0, fireAge = -1, roarAge = -1, mouthCharge = 0, fbPos = null, breathDeg = null, breathAlpha = 0;
 
     if (attack === 'charge') {
       ery = 1.25; // 横を向いて待機
@@ -1409,13 +1471,12 @@ async function createScene3D(container, opts) {
         if (ts >= runStart && ts < H) { legSwing = Math.sin((ts - runStart) / 1000 * 22); tilt = 0.5; drop = 0.15; if (Math.random() < 0.6 * fx) dust.spawn((Math.random() - 0.5) * 1.2, 0.2, ez + 0.6, 0, 0.6 + Math.random(), 1 + Math.random(), 0.8); }
         if (ts >= H) { tilt = 0.5 * (1 - clamp01((ts - H) / 500)); burstKey = 'c' + H; burstPos = [0, -0.3]; }
       }
-      phi = PHI_REST;
     } else if (attack === 'slam') {
       if (W !== null && since >= 0) {
         const raiseP = ease(since / ev.raiseEnd), swingStart = W + ev.swingStart;
         phi = PHI_REST + (PHI_RAISED - PHI_REST) * raiseP; tilt = -0.12 * raiseP; glowCharge = raiseP;
         if (ts >= swingStart && ts < H) { const p = (ts - swingStart) / Math.max(1, H - swingStart); phi = PHI_RAISED + (PHI_SLAM2 - PHI_RAISED) * (0.06 + 0.94 * p * p); tilt = 0.32 * p; drop = 0.25 * p; }
-        if (ts >= H) { const rec = ease((ts - H - 650) / 700); phi = PHI_SLAM2 + (PHI_REST2 - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec); craterAt = 0; craterAge = (ts - H) / 1000; burstKey = 's' + H; burstPos = [0, 0]; }
+        if (ts >= H) { const rec = ease((ts - H - 650) / 700); phi = PHI_SLAM2 + (PHI_REST - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec); craterAt = 0; craterAge = (ts - H) / 1000; burstKey = 's' + H; burstPos = [0, 0]; }
       }
     } else if (attack === 'shockwave') {
       const emit = W !== null ? W + ev.emit : null;
@@ -1426,7 +1487,7 @@ async function createScene3D(container, opts) {
         phi = PHI_REST + (PHI_RAISED - PHI_REST) * raiseP; tilt = -0.12 * raiseP; glowCharge = raiseP;
         if (ts >= downStart && ts < emit) { const p = (ts - downStart) / (emit - downStart); phi = PHI_RAISED + (PHI_SLAM2 - PHI_RAISED) * Math.min(0.97, p * p); tilt = 0.3 * p; }
         if (ts >= emit) {
-          const rec = ease((ts - emit - 650) / 700); phi = PHI_SLAM2 + (PHI_REST2 - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec);
+          const rec = ease((ts - emit - 650) / 700); phi = PHI_SLAM2 + (PHI_REST - PHI_SLAM2) * rec; tilt = 0.32 * (1 - rec); drop = 0.25 * (1 - rec);
           craterAt = waveCenterZ; craterAge = (ts - emit) / 1000; burstKey = 'w' + emit; burstPos = [0, waveCenterZ];
           R = Core.shockRadius(ts, emit, tm.params.speed);                            // 判定と同じ式（H で R = d）
           showWave = ts < H + 600; waveFade = ts > H ? 1 - clamp01((ts - H) / 600) : 1;
@@ -1437,24 +1498,45 @@ async function createScene3D(container, opts) {
         const show = W + ev.aoeShow;
         const castP = ease(since / ev.aoeShow);
         phi = PHI_REST + (PHI_RAISED * 0.75 - PHI_REST) * castP; glowCharge = castP; tilt = -0.1 * castP;
-        if (ts >= show && ts < H) aoeAlpha = 1;                                        // 一定の表示（縮小・カウントダウンなし）
+        if (ts >= show && ts < H - tm.params.blinkMs) aoeAlpha = 1;                    // 一定の表示（縮小・カウントダウンなし）、起爆直前に一瞬消す
         if (ts >= H) { aoeAlpha = 0; fireAge = (ts - H) / 1000; burstKey = 'a' + H; burstPos = [0, 0]; phi = PHI_RAISED * 0.75 * (1 - ease((ts - H) / 600)); }
       }
     } else if (attack === 'roar') {
       if (W !== null && since >= 0) {
         if (ts < H) { red = 1; neckUp = 0.15 * ease(since / Math.max(1, H - W)); }   // 赤発光（固定時間）
-        else { const a = (ts - H) / 1000; red = Math.max(0, 1 - a * 2); neckUp = 0.55 * (1 - ease((a - 0.6) / 0.5)); jaw = 1 - ease((a - 0.6) / 0.5); roarAge = a; tilt = -0.15 * jaw; }
+        else { const a = (ts - H) / 1000; red = Math.max(0, 1 - a * 2); const k = 1 - ease((a - 0.6) / 0.5); neckUp = 0.55 * k; tilt = -0.15 * k; roarAge = a; }
+      }
+    } else if (attack === 'fireball') {
+      if (W !== null && since >= 0) {
+        const launch = W + ev.launch;
+        if (ts < launch) { const p = ease(since / ev.launch); neckUp = 0.5 * p; tilt = -0.15 * p; mouthCharge = p; }
+        else {
+          const k = clamp01((ts - launch) / 180); neckUp = 0.5 - 0.75 * k; tilt = -0.15 + 0.3 * k; mouthCharge = 1 - k;
+          if (ts < H) {
+            const s = (ts - launch) / (H - launch), sz = ez + MOUTH_FWD, sy = MOUTH_Y;
+            fbPos = [0, sy + (0.75 - sy) * s + Math.sin(Math.PI * s) * 0.6, sz + (0 - sz) * s];
+          } else { burstKey = 'f' + H; burstPos = [0, 0]; }
+        }
+      }
+    } else if (attack === 'breath') {
+      if (W !== null && since >= 0) {
+        const sweepStart = W + ev.sweepStart, sweepEnd = W + ev.sweepEnd;
+        if (ts < sweepStart) { const p = ease(since / ev.sweepStart); neckUp = 0.45 * p; tilt = -0.18 * p; mouthCharge = p; ery = p * Core.breathAngle(sweepStart, sweepStart, tm.params) * Math.PI / 180; } // 溜めながら開始方向へ向く
+        else {
+          const k = clamp01((ts - sweepStart) / 150); neckUp = 0.45 - 0.7 * k; tilt = -0.18 + 0.33 * k;
+          breathDeg = Core.breathAngle(Math.min(ts, sweepEnd), sweepStart, tm.params);
+          ery = breathDeg * Math.PI / 180;
+          breathAlpha = ts < sweepEnd ? Math.min(1, (ts - sweepStart) / 60) : Math.max(0, 1 - (ts - sweepEnd) / 250);
+        }
       }
     }
 
     enemy.position.set(0, 0, ez); enemy.rotation.y = ery;
     swing.rotation.x = phi; eTorso.rotation.x = tilt; eTorso.position.y = 1.4 - drop;
     eLegs[0].rotation.x = 0.6 * legSwing; eLegs[1].rotation.x = -0.6 * legSwing;
-    eNeck.rotation.x = -neckUp; eJaw.position.y = -0.18 * jaw; eJaw.rotation.x = 0.5 * jaw;
-    eCoreMat.emissiveIntensity = 1 + 3 * glowCharge; eHeadGlow.emissiveIntensity = 0.4 + 2.2 * glowCharge;
-    eLight.intensity = 2 + 8 * glowCharge;
-    eArmor.emissive.setRGB(0.9 * red, 0.02 * red, 0.02 * red); eMat.emissive.setRGB(0.6 * red, 0, 0);
-    redLight.intensity = 18 * red;
+    eNeck.rotation.x = -neckUp;
+    eHeadGlow.emissiveIntensity = 0.4 + 2.2 * glowCharge;
+    eMat.emissive.setRGB(0.9 * red, 0.02 * red, 0.02 * red);
     craterMat.uniforms.uAge.value = craterAge; if (craterAt !== null) crater.position.z = craterAt;
     if (burstKey && burstKey !== lastBurst) { lastBurst = burstKey; burst(burstPos[0], burstPos[1], attack === 'aoe' ? 220 : 140, attack === 'aoe' ? 1.5 : 1); shake = Math.max(shake, attack === 'charge' ? 0.12 : 0.07); }
 
@@ -1477,7 +1559,7 @@ async function createScene3D(container, opts) {
     // 発生／接触の閃光
     let fl = 0, flz = 0;
     if (attack === 'shockwave' && W !== null && ts >= W + ev.emit) { fl = 1 - clamp01((ts - W - ev.emit) / 280); flz = waveCenterZ; }
-    if ((attack === 'slam' || attack === 'charge') && H !== null && ts >= H) { fl = 1 - clamp01((ts - H) / 250); flz = attack === 'charge' ? -0.4 : 0; }
+    if ((attack === 'slam' || attack === 'charge' || attack === 'fireball') && H !== null && ts >= H) { fl = 1 - clamp01((ts - H) / 250); flz = attack === 'charge' ? -0.4 : 0; }
     flash.material.opacity = fl; flash.position.set(0, 0.8, flz); flash.scale.setScalar(2 + 4 * (1 - fl));
     // AoE
     aoeDisk.visible = aoeAlpha > 0; aoeMat.uniforms.uAlpha.value = aoeAlpha;
@@ -1491,6 +1573,24 @@ async function createScene3D(container, opts) {
     });
     if (roarAge >= 0 && roarAge < 1) { roarRing.position.z = ez + 0.6; roarRing.scale.setScalar(0.5 + roarAge * 13); roarRingMat.opacity = 0.7 * (1 - roarAge); } else roarRingMat.opacity = 0;
     if (roarAge >= 0 && roarAge < 0.05) shake = Math.max(shake, 0.1);
+    // 火球・ブレス
+    mouthGlow.material.opacity = mouthCharge * 0.9;
+    if (mouthCharge > 0) { mouthGlow.position.set(Math.sin(ery) * (MOUTH_FWD + 0.1), MOUTH_Y + 0.1, ez + Math.cos(ery) * (MOUTH_FWD + 0.1)); mouthGlow.scale.setScalar(0.4 + 1.4 * mouthCharge); mouthGlow.material.color.setHex(attack === 'breath' ? 0xffd060 : 0xff7a2a); }
+    fireball.visible = fbPos !== null;
+    if (fbPos) {
+      fireball.position.set(...fbPos); fireballHalo.scale.setScalar(1.6 + 0.3 * Math.sin(t * 40));
+      for (let k = 0; k < 6 * fx; k++) sparks.spawn(fbPos[0] + (Math.random() - 0.5) * 0.3, fbPos[1] + (Math.random() - 0.5) * 0.3, fbPos[2] - 0.2, (Math.random() - 0.5) * 0.8, 0.5 + Math.random(), -1 - Math.random(), 0.25 + Math.random() * 0.25);
+    }
+    breathGroup.visible = breathAlpha > 0;
+    if (breathGroup.visible) {
+      const th = breathDeg * Math.PI / 180, dist = -ez, reach = dist + 1.2, len = Math.hypot(reach, MOUTH_Y), rEnd = len * Math.tan(Core.BREATH_HALF_WIDTH_DEG * Math.PI / 180);
+      breathGroup.position.set(Math.sin(th) * MOUTH_FWD, MOUTH_Y, ez + Math.cos(th) * MOUTH_FWD);
+      breathGroup.rotation.set(Math.atan2(MOUTH_Y, reach), th, 0);
+      breathCone.scale.set(rEnd, len, rEnd * 0.35); breathCone.position.set(0, 0, len / 2);
+      breathMat.uniforms.uAlpha.value = 0.85 * breathAlpha; breathMat.uniforms.uTime.value = t;
+      const gx = Math.sin(th) * dist, gz = ez + Math.cos(th) * dist;
+      for (let k = 0; k < 10 * fx * breathAlpha; k++) { const a = Math.random() * 6.28; sparks.spawn(gx + Math.sin(a) * 0.6, 0.15, gz + Math.cos(a) * 0.6, Math.sin(a) * 2, 1.5 + Math.random() * 2, Math.cos(a) * 2, 0.3 + Math.random() * 0.3); }
+    }
 
     sparks.update(dt, 9); dust.update(dt, 1.2);
 
@@ -1500,17 +1600,17 @@ async function createScene3D(container, opts) {
     const inputAt = view ? view.inputAt : null;
     if (inputAt !== null && ts >= inputAt) {
       const k = (ts - inputAt) / 1000, out = ease(k / 0.22), back = ease((k - 0.75) / 0.45);
-      px = 1.9 * out * (1 - back); ry = -Math.PI * 2 * ease(k / 0.32);
+      px = 1.9 * out * (1 - back); ry = 0.16 * Math.sin(Math.PI * clamp01(k / 0.50));
       st.tilt = -0.45 * out * (1 - back); st.crouch = 0.15 + 0.35 * out * (1 - back); st.stride = 0.5 * out * (1 - back); st.arms = 0.4 * out * (1 - back);
       if (k < 0.35 && (!ghostSnaps.length || ts - ghostSnaps[ghostSnaps.length - 1].ts > 45)) ghostSnaps.push({ ts, x: px, ry });
     }
     const out = ui && ui.impactOutcome;
     if (view && view.impactAt !== null && ts >= view.impactAt && out && /hit|no_input/.test(out)) { const k = (ts - view.impactAt) / 1000; const s = Math.sin(Math.min(1, k / 0.35) * Math.PI); pz = 0.6 * s; st.lean = -0.4 * s; }
-    player.position.set(px, 0, pz); player.rotation.y = ry; poseHuman(player, t, st);
+    player.position.set(px, 0, pz); player.rotation.y = Math.atan2(-px, ez - pz) + ry; poseHuman(player, t, st);
     blob.position.set(px, 0.006, pz);
     while (ghostSnaps.length && ts - ghostSnaps[0].ts > 420) ghostSnaps.shift();
     if (inputAt === null) ghostSnaps.length = 0;
-    ghosts.forEach((g, i) => { const s = ghostSnaps[ghostSnaps.length - 1 - i]; if (!s) { g.visible = false; return; } g.visible = true; g.position.set(s.x, 0, 0); g.rotation.y = s.ry; poseHuman(g, t, st); g.userData.mat.opacity = 0.35 * (1 - (ts - s.ts) / 420); });
+    ghosts.forEach((g, i) => { const s = ghostSnaps[ghostSnaps.length - 1 - i]; if (!s) { g.visible = false; return; } g.visible = true; g.position.set(s.x, 0, 0); g.rotation.y = Math.atan2(-s.x, ez) + s.ry; poseHuman(g, t, st); g.userData.mat.opacity = 0.35 * (1 - (ts - s.ts) / 420); });
     if (view && view.impactAt !== null && ts >= view.impactAt) {
       const kk = clamp01((ts - view.impactAt) / 220);
       hitFlash.material.color.setHex(!out ? 0xffffff : out === 'just' ? 0x6cf7ff : out === 'normal' ? 0x7dffa8 : 0xff4058);
@@ -1523,7 +1623,7 @@ async function createScene3D(container, opts) {
     renderer.render(scene, camera);
   }
   return {
-    render, resize, ok: true,
+    render, resize,
     info: () => { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return { renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown', three: THREE.REVISION }; },
     dispose() { renderer.dispose(); renderer.domElement.remove(); },
   };
@@ -1540,7 +1640,7 @@ async function loadThree() {
 function createNullScene(container) {
   const el = document.createElement('div'); el.className = 'null-scene'; container.appendChild(el);
   return {
-    ok: true, resize() {}, dispose() { el.remove(); }, info: () => ({ renderer: 'none', three: null }),
+    resize() {}, dispose() { el.remove(); }, info: () => ({ renderer: 'none', three: null }),
     render(view) { if (!view) { el.textContent = 'idle'; return; } el.textContent = `${view.attack} ${view.phase}`; el.dataset.phase = view.phase; },
   };
 }
@@ -1566,18 +1666,19 @@ const ATTACK_INSTR = {
   shockwave: '遠くの敵が地面を叩き、その地点から衝撃波が地面を這って広がります。衝撃波の先端があなたに届く瞬間に合わせて回避してください。',
   aoe: '敵が詠唱すると、あなたの足元に赤い危険範囲が表示され、一定時間後に爆発します。爆発の瞬間に合わせて回避してください（残り時間の表示はありません）。',
   roar: '待機している敵の体が突然赤く光り、すぐに咆哮します。咆哮の瞬間に合わせて回避してください。',
+  fireball: '敵が頭をのけぞらせて口に炎を溜め、火球を吐きます。火球があなたに当たる瞬間に合わせて回避してください。',
+  breath: '敵が息を吸い込み、ブレスを吐いて横に薙ぎ払います。炎の縁があなたに届く瞬間に合わせて回避してください。',
 };
-const COLORS = { charge: '#5aa9ff', slam: '#ffb547', shockwave: '#ff5c8a', aoe: '#7dffa8', roar: '#c49bff', grid: 'rgba(140,170,210,0.13)', axis: '#7f93ad', text: '#c9d6e6', band: 'rgba(110,240,255,0.10)' };
-const nowAbs = () => performance.timeOrigin + performance.now();
+const COLORS = { charge: '#5aa9ff', slam: '#ffb547', shockwave: '#ff5c8a', aoe: '#7dffa8', roar: '#c49bff', fireball: '#ff7a3d', breath: '#ffe066', grid: 'rgba(140,170,210,0.13)', axis: '#7f93ad', text: '#c9d6e6', band: 'rgba(110,240,255,0.10)' };
 
 /* ------------------------------------------------------------ 設定 --- */
 const DEFAULT_SETTINGS = {
   justWindow: 110, invincibleWindow: 350, obsAfter: 1000,
   attacks: JSON.parse(JSON.stringify(Core.DEFAULT_ATTACK_PARAMS)),
-  mode: 'individual', attack: 'slam',
-  practice: 10, main: 100, blockSize: 25, mixedPerAttack: 50, mixedPractice: 10,
+  mode: 'mixed', attack: 'slam', fpsLimit: 0,
+  practice: 10, main: 100, blockSize: 25, mixedPerAttack: 50, mixedPractice: 14,
   itiRange: [1000, 2500], feedbackMain: true, feedbackMs: 900, interTrialMs: 600,
-  inputKey: 'Space', inputDevice: 'auto', quality: 'high', effects: 'standard', sound: false, excludeFrameDrops: false,
+  inputKey: 'Space', inputDevice: 'auto', quality: 'high', effects: 'standard', excludeFrameDrops: false,
   bootstrapN: 500,
 };
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -1585,20 +1686,27 @@ function mergeSettings(base, over) {
   const out = clone(base);
   if (!over) return out;
   for (const k of Object.keys(base)) if (over[k] !== undefined && k !== 'attacks') out[k] = over[k];
-  if (over.attacks) for (const a of AT) out.attacks[a] = { ...base.attacks[a], ...(over.attacks[a] || {}) };
+  if (over.attacks) for (const a of AT) {
+    const o = over.attacks[a] || {};
+    for (const k of Object.keys(base.attacks[a])) if (o[k] !== undefined) out.attacks[a][k] = o[k];
+  }
   return out;
 }
 function validateSettings(s) {
   const e = [], pos = (v) => Number.isFinite(v) && v > 0;
   if (!pos(s.justWindow)) e.push('ジャスト受付時間 J は正の値にしてください。');
   if (!pos(s.invincibleWindow) || s.justWindow >= s.invincibleWindow) e.push('通常回避無敵時間 D は J より長くしてください。');
+  if (!(s.fpsLimit === 0 || s.fpsLimit >= 10)) e.push('FPS 上限は 0（無制限）または 10 以上にしてください。');
   if (!(s.obsAfter >= 100)) e.push('接触後の入力受付は 100 ms 以上にしてください。');
   const A = s.attacks;
   if (!(A.charge.windupMs >= A.charge.turnMs && A.charge.runMs >= 100 && A.charge.startDistance >= 3)) e.push('突進：溜め時間は向き直り以上、走行は 100 ms 以上、開始距離は 3 以上にしてください。');
   if (!(A.slam.raiseMs >= 50 && A.slam.holdMs >= 0 && A.slam.swingMs >= 80)) e.push('叩きつけ：振り上げ 50 ms 以上、振り下ろし 80 ms 以上にしてください。');
   if (!(A.shockwave.windupMs >= 200 && A.shockwave.speed > 0 && A.shockwave.distance >= 3)) e.push('衝撃波：予備動作 200 ms 以上、速度は正、距離は 3 以上にしてください。');
   if (!(A.aoe.castMs >= 100 && A.aoe.delayMs >= 100)) e.push('AoE：予備動作と表示→爆発は 100 ms 以上にしてください。');
-  if (!(A.roar.glowMs >= 100 && A.roar.glowMs <= 500)) e.push('赤発光→咆哮は 100〜500 ms にしてください。');
+  if (!(A.aoe.blinkMs >= 0 && A.aoe.blinkMs < A.aoe.delayMs)) e.push('AoE：起爆直前に表示を消す時間は 0 以上、表示→爆発より短くしてください。');
+  if (!(A.fireball.windupMs >= 200 && A.fireball.flightMs >= 100)) e.push('火球：溜め 200 ms 以上、飛行 100 ms 以上にしてください。');
+  if (!(A.breath.windupMs >= 200 && A.breath.startAngleDeg >= 20 && A.breath.startAngleDeg <= 120 && A.breath.speedDps > 0 && ['right', 'left'].includes(A.breath.direction))) e.push('ブレス：溜め 200 ms 以上、開始角度 20〜120°、速度は正にしてください。');
+  if (!(A.roar.glowMs >= 100 && A.roar.glowMs <= 500)) e.push('咆哮の予兆時間は 100〜500 ms にしてください。');
   if (!(s.itiRange[0] >= 500 && s.itiRange[1] >= s.itiRange[0])) e.push('攻撃間隔（待機時間）の範囲が不正です（下限 500 ms 以上）。');
   if (!(s.practice >= 0 && s.main >= 1 && s.mixedPerAttack >= 1 && s.mixedPractice >= 0 && s.blockSize >= 1)) e.push('試行数が不正です。');
   if (!(s.bootstrapN >= 0 && s.bootstrapN <= 5000)) e.push('ブートストラップ回数は 0〜5000 にしてください。');
@@ -1639,7 +1747,7 @@ function createSession(settings, mode, attack) {
   const seed = params.get('seed') || `${id}:${Math.floor(Math.random() * 2 ** 32).toString(16)}`;
   const plan = Core.buildPlan({ mode, attack, practice: settings.practice, main: settings.main, blockSize: settings.blockSize, mixedPerAttack: settings.mixedPerAttack, mixedPractice: settings.mixedPractice, itiRange: settings.itiRange }, seed);
   return {
-    format: 'jdpred-session/1', app_version: Core.VERSION, id, seed, mode, attack: mode === 'individual' ? attack : null,
+    format: 'jdpred-session/1', id, seed, mode, attack: mode === 'individual' ? attack : null,
     created_at: new Date().toISOString(), originPerf: performance.now(), originTimeOrigin: performance.timeOrigin,
     settings: clone(settings), queue: plan.queue, cursor: 0, trials: [], inProgress: null,
     device: settings.inputDevice === 'auto' ? null : settings.inputDevice, status: 'active', env: envInfo(),
@@ -1696,11 +1804,20 @@ function focusLost(reason) { App.held.clear(); if (['trial', 'wait_release', 'fe
 /* ---------------------------------------------------------- 計測ループ --- */
 function frameLoop(ts) {
   requestAnimationFrame(frameLoop);
+  // FPS 上限：描画・計測ともに間引いたフレームだけで行う（予兆・接触フレームも実際に描画したフレーム）
+  if (App.rafPrev !== undefined) { const r = ts - App.rafPrev; if (r > 0 && r < 100) App.rafDt = App.rafDt ? App.rafDt * 0.9 + r * 0.1 : r; }
+  App.rafPrev = ts;
+  const lim = +((App.session ? App.session.settings : App.settings) || {}).fpsLimit || 0;
+  if (lim > 0) {
+    const iv = 1000 / lim, tol = Math.min(iv * 0.5, (App.rafDt || 0) * 0.5);
+    if (App.nextDrawAt !== undefined && ts < App.nextDrawAt - tol) return;
+    App.nextDrawAt = (App.nextDrawAt === undefined || ts - App.nextDrawAt > iv) ? ts + iv : App.nextDrawAt + iv;
+  } else App.nextDrawAt = undefined;
   if (App.lastFrameTs !== null) { const d = ts - App.lastFrameTs; if (d > 0 && d < 1000) { App.idleFrames.push(d); if (App.idleFrames.length > 240) App.idleFrames.shift(); } }
   App.lastFrameTs = ts;
   try { stepController(ts); } catch (err) { console.error(err); showFatal('計測処理でエラー: ' + err.message); }
   if (App.scene) {
-    try { App.scene.render(App.runner ? App.runner.view(ts) : null, ts, { impactOutcome: App.impactOutcome, previewAttack: App.previewAttack }); }
+    try { App.scene.render(App.runner ? App.runner.view() : null, ts, { impactOutcome: App.impactOutcome, previewAttack: App.previewAttack }); }
     catch (err) { if (!App.renderErr) { App.renderErr = true; console.error(err); toast('描画エラー: ' + err.message, true); } }
   }
 }
@@ -1715,7 +1832,6 @@ function stepController(ts) {
     if (r.impactFrame !== null && App.impactOutcome === null) {
       const fi = r.firstInput;
       App.impactOutcome = fi ? Core.classify(fi.time - r.H, s.settings.justWindow, s.settings.invincibleWindow) : 'no_input';
-      if (s.settings.sound) beep(App.impactOutcome);
     }
     if (r.done) finishTrial(ts, null);
   } else if (App.state === 'feedback') {
@@ -1750,7 +1866,7 @@ function finishTrial(ts, abortReason) {
     fields: {
       session_id: s.id, timestamp_utc: new Date(performance.timeOrigin + (runner.state.S ?? performance.now())).toISOString(),
       focus_lost: !!abortReason && abortReason !== 'user_pause' && abortReason !== 'user_end', feedback_enabled: fb, random_seed: s.seed,
-      retry_of: item.retry_of || null, timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE,
+      retry_of: item.retry_of || null, timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE, fps_limit: s.settings.fpsLimit || 0,
       clock_note: 'ms relative to session start (performance.timeOrigin + performance.now())',
     },
   });
@@ -1828,7 +1944,7 @@ function resumeSession(id) {
         is_practice: item.is_practice, valid_for_fit: false, invalid_reason: 'page_reload', status: 'aborted', outcome: 'aborted', is_censored: false, focus_lost: true,
         timestamp_utc: s.inProgress.started_at, random_seed: s.seed, retry_of: item.retry_of || null, foreperiod_ms: item.foreperiod_ms,
         just_window_ms: s.settings.justWindow, invincible_window_ms: s.settings.invincibleWindow, attack_parameter_json: JSON.stringify(s.settings.attacks[item.attack]),
-        timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE, clock_note: 'incomplete trial interrupted by page reload' });
+        timing_key: Core.timingKey(item.attack, s.settings.attacks[item.attack]), render_mode: RENDER_MODE, fps_limit: s.settings.fpsLimit || 0, clock_note: 'incomplete trial interrupted by page reload' });
       requeue(item);
     }
     s.inProgress = null;
@@ -1840,17 +1956,6 @@ function resumeSession(id) {
   refreshButtons(); updateHud(true);
 }
 
-let audioCtx = null;
-function beep(o) {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
-    osc.frequency.value = o === 'just' ? 1320 : o === 'normal' ? 880 : 220;
-    g.gain.setValueAtTime(0.08, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
-    osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.26);
-  } catch (e) { /* 無視 */ }
-}
-
 /* ---------------------------------------------------------------- HUD --- */
 function setOverlay(html) { const el = $('#overlay'); el.innerHTML = html; el.hidden = !html; }
 function showBreak(item, prev, resumed) {
@@ -1858,7 +1963,7 @@ function showBreak(item, prev, resumed) {
   const head = resumed ? '再開' : item.block_index === 0 ? '練習' : (prev && prev.block_index === 0 ? '本測定を開始' : '休憩');
   const blk = item.block_index === 0 ? '練習（推定には使いません）' : `本測定 ブロック ${item.block_index} / ${blocks}`;
   const what = s.mode === 'individual' ? `<div class="ov-text">${ATTACK_INSTR[s.attack]}</div>` :
-    `<div class="ov-text">5 種類の攻撃がランダムな順序で来ます。どの攻撃も、当たる瞬間に合わせて回避してください。</div><ul class="ov-list">${AT.map((a) => `<li><b>${AL[a]}</b>：${ATTACK_INSTR[a]}</li>`).join('')}</ul>`;
+    `<div class="ov-text">${AT.length} 種類の攻撃がランダムな順序で来ます。どの攻撃も、当たる瞬間に合わせて回避してください。</div><ul class="ov-list">${AT.map((a) => `<li><b>${AL[a]}</b>：${ATTACK_INSTR[a]}</li>`).join('')}</ul>`;
   const key = App.settings.inputKey === 'Space' ? 'スペースキー' : App.settings.inputKey;
   setOverlay(`<div class="ov-title">${esc(head)}</div><div class="ov-cond">${esc(MODE_LABEL[s.mode])}${s.mode === 'individual' ? '：' + AL[s.attack] : ''} — ${esc(blk)}</div>${what}
     <div class="ov-small">回避：${esc(key)} ／ マウス左クリック ／ 画面タップ（最初の 1 回だけ有効）。Esc で休憩。</div>
@@ -1875,7 +1980,7 @@ function showLastResult(r, fb) {
 }
 function updateHud(force) {
   const s = App.session, top = $('#hud-top');
-  if (!s) { top.innerHTML = '<span class="muted">セッション未開始</span>'; $('#side-session').innerHTML = '<p class="muted">測定モードと攻撃を選んで「測定を開始」を押してください。</p>'; return; }
+  if (!s) { top.innerHTML = '<span class="muted">セッション未開始</span>'; $('#side-session').innerHTML = ''; return; }
   if (!force && performance.now() - (updateHud._l || 0) < 250) return;
   updateHud._l = performance.now();
   const item = s.queue[Math.min(s.cursor, s.queue.length - 1)];
@@ -1920,14 +2025,13 @@ async function initScene() {
   const stage = $('#stage-gl');
   if (App.scene) { App.scene.dispose(); App.scene = null; }
   const s = (App.session && App.session.settings) || App.settings;
-  if (RENDER_MODE === 'none') { App.scene = createNullScene(stage); $('#scene-status').textContent = '簡易描画（テスト用 ?render=none）'; return; }
+  if (RENDER_MODE === 'none') { App.scene = createNullScene(stage); return; }
   const c = document.createElement('canvas');
   if (!(c.getContext('webgl2') || c.getContext('webgl'))) { App.sceneError = 'この環境では WebGL を利用できません。ハードウェアアクセラレーションを有効にするか、別のブラウザを使用してください。'; showFatal(App.sceneError); return; }
-  $('#scene-status').textContent = 'Three.js を読み込み中…';
   try {
     App.scene = await createScene3D(stage, { quality: s.quality, effects: s.effects });
-    const info = App.scene.info(); $('#scene-status').textContent = `Three.js r${info.three} ／ ${info.renderer}`; App.sceneError = null;
-  } catch (err) { App.sceneError = err.message; showFatal(err.message + '（ネットワーク接続と CDN へのアクセスを確認してください）'); $('#scene-status').textContent = '3D 初期化失敗'; }
+    App.sceneError = null;
+  } catch (err) { App.sceneError = err.message; showFatal(err.message + '（ネットワーク接続と CDN へのアクセスを確認してください）'); }
 }
 function applyScene(s) { const k = JSON.stringify([s.quality, s.effects]); if (k !== sceneKey) { sceneKey = k; initScene(); } }
 
@@ -1945,14 +2049,14 @@ function switchTab(name) {
 /* ------------------------------------------------------------- 設定画面 --- */
 const FIELDS = [
   { sec: '判定（測定後の成功率評価に使う設定値）' },
-  { k: 'justWindow', label: 'ジャスト受付時間 J（ms）', type: 'num', step: 0.5, presets: [110, 176, 181.5, 187], help: '測定値ではなく、成功率の計算に使う仮定値です。' },
-  { k: 'invincibleWindow', label: '通常回避無敵時間 D（ms）', type: 'num', help: '仮設定。' },
+  { k: 'justWindow', label: 'ジャスト受付時間 J（ms）', type: 'num', step: 0.5, presets: [110, 176, 181.5, 187] },
+  { k: 'invincibleWindow', label: '通常回避無敵時間 D（ms）', type: 'num' },
   { k: 'obsAfter', label: '接触後の入力受付（ms）', type: 'num', help: '遅すぎる入力も測るため、接触後もこの時間まで受け付けます。' },
   { sec: '試行数' },
   { k: 'practice', label: '個別測定：練習', type: 'num' }, { k: 'main', label: '個別測定：本測定', type: 'num' },
   { k: 'mixedPractice', label: '混合測定：練習（合計）', type: 'num' }, { k: 'mixedPerAttack', label: '混合測定：本測定（各攻撃）', type: 'num' },
   { k: 'blockSize', label: 'ブロックの試行数（休憩の間隔）', type: 'num' },
-  { k: 'itiRange', label: '攻撃間隔：次の攻撃の予兆までの待機（ms、ランダム）', type: 'range', help: '一定周期だと画面を見ずに回避できてしまうため、ランダムにします。' },
+  { k: 'itiRange', label: '攻撃間隔：次の攻撃の予兆までの待機（ms、ランダム）', type: 'range' },
   { sec: '突進' },
   { k: 'attacks.charge.turnMs', label: '向き直り（ms）', type: 'num' }, { k: 'attacks.charge.windupMs', label: '予兆開始 → 走り出し（向き直り＋溜め, ms）', type: 'num' },
   { k: 'attacks.charge.runMs', label: '走り出し → 接触（ms）', type: 'num' }, { k: 'attacks.charge.startDistance', label: '突進開始距離（シーン単位）', type: 'num', step: 0.5 },
@@ -1960,22 +2064,30 @@ const FIELDS = [
   { k: 'attacks.slam.raiseMs', label: '振り上げ（ms）', type: 'num' }, { k: 'attacks.slam.holdMs', label: '溜め（ms）', type: 'num' }, { k: 'attacks.slam.swingMs', label: '振り下ろし → 地面に接触（ms）', type: 'num' },
   { sec: '衝撃波' },
   { k: 'attacks.shockwave.windupMs', label: '予備動作 → 発生（ms）', type: 'num' }, { k: 'attacks.shockwave.speed', label: '衝撃波の速度 v（単位/秒）', type: 'num', step: 0.5 },
-  { k: 'attacks.shockwave.distance', label: '発生源からの距離 d（シーン単位）', type: 'num', step: 0.5, help: '発生から到達まで d/v 秒。' },
-  { sec: 'AoE 起爆' },
-  { k: 'attacks.aoe.castMs', label: '予備動作 → AoE 表示（ms）', type: 'num' }, { k: 'attacks.aoe.delayMs', label: 'AoE 表示 → 爆発（ms）', type: 'num', help: '既定 1500 ms。表示中の数値カウントダウンや縮小演出はありません。' },
-  { sec: '赤発光 → 咆哮' },
-  { k: 'attacks.roar.glowMs', label: '赤発光 → 咆哮（ms、100〜500）', type: 'num' },
+  { k: 'attacks.shockwave.distance', label: '発生源からの距離 d（シーン単位）', type: 'num', step: 0.5 },
+  { sec: 'AoE' },
+  { k: 'attacks.aoe.castMs', label: '予備動作 → AoE 表示（ms）', type: 'num' }, { k: 'attacks.aoe.delayMs', label: 'AoE 表示 → 爆発（ms）', type: 'num' },
+  { k: 'attacks.aoe.blinkMs', label: '起爆直前に AoE 表示を消す時間（ms）', type: 'num' },
+  { sec: '咆哮' },
+  { k: 'attacks.roar.glowMs', label: '予兆（赤く光る）→ 咆哮（ms、100〜500）', type: 'num' },
+  { sec: '火球' },
+  { k: 'attacks.fireball.windupMs', label: '予兆（溜め）→ 発射（ms）', type: 'num' }, { k: 'attacks.fireball.flightMs', label: '発射 → 着弾（ms）', type: 'num' },
+  { sec: 'ブレス' },
+  { k: 'attacks.breath.windupMs', label: '予兆（溜め）→ 薙ぎ払い開始（ms）', type: 'num' },
+  { k: 'attacks.breath.startAngleDeg', label: '薙ぎ払い開始角度（度、プレイヤー方向から）', type: 'num' },
+  { k: 'attacks.breath.speedDps', label: '薙ぎ払い速度（度/秒）', type: 'num' },
+  { k: 'attacks.breath.direction', label: '薙ぎ払いの向き', type: 'select', options: [['right', '右から（画面の右 → 左）'], ['left', '左から（画面の左 → 右）']] },
   { sec: '表示・入力' },
-  { k: 'feedbackMain', label: '本測定での結果表示', type: 'select', options: [[true, '短く表示する'], [false, '表示しない']], help: '練習では常に表示。設定は試行ごとに記録されます。' },
+  { k: 'feedbackMain', label: '本測定での結果表示', type: 'select', options: [[true, '短く表示する'], [false, '表示しない']] },
   { k: 'feedbackMs', label: '結果表示の時間（ms）', type: 'num' }, { k: 'interTrialMs', label: '試行間の空白（ms）', type: 'num' },
   { k: 'inputKey', label: '回避キー', type: 'key' },
-  { k: 'inputDevice', label: '入力デバイス', type: 'select', options: [['auto', '最初の入力で決定'], ['keyboard', 'キーボード'], ['mouse', 'マウス'], ['touch', 'タッチ']], help: '異なるデバイスの入力は記録しますが推定から除外します。' },
+  { k: 'inputDevice', label: '入力デバイス', type: 'select', options: [['auto', '最初の入力で決定'], ['keyboard', 'キーボード'], ['mouse', 'マウス'], ['touch', 'タッチ']] },
   { k: 'quality', label: '3D 画質', type: 'select', options: [['high', '高'], ['medium', '中'], ['low', '低（影なし）']] },
   { k: 'effects', label: 'エフェクト表示量', type: 'select', options: [['high', '多い'], ['standard', '標準'], ['low', '少ない']] },
-  { k: 'sound', label: '効果音（接触後のみ）', type: 'bool' },
+  { k: 'fpsLimit', label: 'FPS 上限（0 = 無制限）', type: 'num', presets: [0, 30, 60, 120, 144, 240], help: '描画と計測フレームをこの FPS に制限します。ブラウザの描画はモニタのリフレッシュレートに同期するため、それを超える値を指定しても無制限と同じです。値は試行ごとに記録されます。' },
   { sec: '解析' },
-  { k: 'excludeFrameDrops', label: '大きなフレーム落ちの試行を推定から除外', type: 'bool', help: '既定では警告のみ（除外しない）。' },
-  { k: 'bootstrapN', label: 'ブートストラップ反復回数', type: 'num', help: '既定 500。' },
+  { k: 'excludeFrameDrops', label: '大きなフレーム落ちの試行を推定から除外', type: 'bool' },
+  { k: 'bootstrapN', label: 'ブートストラップ反復回数', type: 'num' },
 ];
 const getK = (o, k) => k.split('.').reduce((x, p) => x[p], o);
 const setK = (o, k, v) => { const ps = k.split('.'); const last = ps.pop(); ps.reduce((x, p) => x[p], o)[last] = v; };
@@ -2040,8 +2152,11 @@ async function analyzeGroup(g, opts, rng, progress) {
   const NB = Math.max(0, Math.round(opts.bootstrapN)), bs = [];
   for (let k = 0; k < NB; k++) {
     const rs = rows.map(() => rows[rng.int(rows.length)]);
-    const f = Core.fitPredictive(rs); const o = rs.filter((r) => r.e !== null).map((r) => r.e);
-    if (f.ok) bs.push({ mu: f.mu, sigma: f.sigma, smu: Core.mean(o), ssd: Math.sqrt(o.reduce((a, v) => a + (v - Core.mean(o)) ** 2, 0) / o.length), just: rs.filter((r) => r.e !== null && r.e >= -opts.J && r.e <= 0).length / rs.length });
+    const f = Core.fitPredictive(rs);
+    if (f.ok) {
+      const o = rs.filter((r) => r.e !== null).map((r) => r.e), om = Core.mean(o);
+      bs.push({ mu: f.mu, sigma: f.sigma, smu: om, ssd: Math.sqrt(o.reduce((a, v) => a + (v - om) ** 2, 0) / o.length) });
+    }
     if (k % 25 === 0) { progress(`${AL[g.attack]}：ブートストラップ ${k}/${NB}`); await yieldUI(); }
   }
   out.boot = bs;
@@ -2126,7 +2241,7 @@ function renderStatsControls() {
   $('#st-sessions').innerHTML = ids.length ? ids.map((id) => { const s = Store.loadSession(id); if (!s) return ''; const m = s.trials.filter((t) => t.status === 'completed' && !t.is_practice).length;
     return `<label class="sess"><input type="checkbox" value="${esc(id)}" ${checked.has(id) ? 'checked' : ''}> <span class="mono">${esc(id)}</span> ${esc(MODE_LABEL[s.mode])}${s.attack ? '・' + AL[s.attack] : ''}（本測定 ${m}）</label>`; }).join('') : '<p class="muted">保存されたセッションはありません。</p>';
   $('#st-boot').value = App.settings.bootstrapN;
-  $('#st-J').value = App.statsJ ?? App.settings.justWindow;
+  $('#st-J').value = App.settings.justWindow;
 }
 async function runAnalysisUI() {
   const ids = $$('#st-sessions input:checked').map((i) => i.value);
@@ -2143,7 +2258,7 @@ async function runAnalysisUI() {
   } catch (err) { console.error(err); toast('解析エラー: ' + err.message, true); }
   finally { btn.disabled = false; bar.hidden = true; }
 }
-function curJ() { const v = +$('#st-J').value; return Number.isFinite(v) && v > 0 ? v : App.settings.justWindow; }
+function curJ(a = App.analysis) { const el = $('#st-J'), v = el ? +el.value : NaN; return Number.isFinite(v) && v > 0 ? v : (a && a.sessions && a.sessions[0] ? a.sessions[0].settings.justWindow : App.settings.justWindow); }
 function curD() { return App.analysis && App.analysis.sessions[0] ? App.analysis.sessions[0].settings.invincibleWindow : App.settings.invincibleWindow; }
 function groupFor(attack) { const a = App.analysis; const sel = (App.groupSel || {})[attack] || a.defaultGroup[attack]; return a.groups.find((g) => g.key === sel) || null; }
 function renderStats() {
@@ -2162,7 +2277,7 @@ function renderStats() {
   let html = `<section class="card"><h2>攻撃ごとの比較</h2>
     <p class="muted">解析：${esc(a.analyzed_at)} ／ セッション ${a.sessionIds.map(esc).join('、')}${multi ? '（明示的に選択して結合）' : ''}。μ・σ は観測開始による切断と無入力の右打ち切りを考慮した最尤推定。Just 成功率（モデル）は非切断の正規分布で P = Φ(−μ/σ) − Φ((−J−μ)/σ)。</p>
     <div class="scroll-x"><table class="tbl"><tr><th>攻撃</th><th>有効試行数</th><th>平均誤差 μ（ms）</th><th>標準偏差 σ（ms）</th><th>Just 成功率（モデル）</th><th>Just 成功率（実測）</th><th>μ − 最適（−J/2）</th></tr>${rows}</table></div>
-    <h3>5 種類の正規分布の比較</h3><canvas id="ch-overlay" class="tall"></canvas></section>`;
+    <h3>${AT.length} 種類の正規分布の比較</h3><canvas id="ch-overlay" class="tall"></canvas></section>`;
   // 攻撃の選択
   html += `<section class="card"><div class="ctl-row"><b>詳細：</b>${AT.map((at) => `<button class="chip ${App.statsAttack === at ? 'on' : ''}" data-statsattack="${at}">${AL[at]}</button>`).join('')}</div><div id="attack-detail"></div></section>`;
   $('#stats-body').innerHTML = html;
@@ -2240,7 +2355,7 @@ function renderAttackDetail() {
 function stripAnalysis(a) { return JSON.parse(JSON.stringify(a, (k, v) => (['rows', 'boot', 'pit'].includes(k) ? undefined : v))); }
 function sessionExport(s) {
   return {
-    app: APP_NAME, app_version: Core.VERSION, export_schema: 'jdpred-session-export/1', exported_at: new Date().toISOString(),
+    app: APP_NAME, export_schema: 'jdpred-session-export/1', exported_at: new Date().toISOString(),
     time_base: { unit: 'ms', origin: 'セッション作成時刻（performance.timeOrigin + performance.now()）からの相対時刻', note: '同一ページ読み込み内の時刻差は単調時計で正確。再読み込みをまたぐ差は壁時計に依存する近似。描画フレーム時刻は表示の発光時刻ではない。' },
     session: { id: s.id, mode: s.mode, attack: s.attack, created_at: s.created_at, seed: s.seed, status: s.status, settings: s.settings, input_device: s.device, loads: s.loads, planned_queue: s.queue },
     environment: s.env, trials: s.trials,
@@ -2250,7 +2365,7 @@ function download(name, text, type) { const url = URL.createObjectURL(new Blob([
 /** SAOFD シミュレーション向けのパラメータ JSON（未測定の攻撃は null） */
 function paramsExport(a) {
   const dist = {}, meta = {};
-  const J = curJOr(a), D = a.sessions[0] ? a.sessions[0].settings.invincibleWindow : 350;
+  const J = curJ(a), D = a.sessions[0] ? a.sessions[0].settings.invincibleWindow : App.settings.invincibleWindow;
   for (const at of AT) {
     const key = a.defaultGroup[at]; const g = key && a.groups.find((x) => x.key === key);
     if (!g || !g.fit.mle.ok) { dist[at] = null; meta[at] = null; continue; }
@@ -2271,24 +2386,24 @@ function paramsExport(a) {
   return {
     schema_version: '1.0', model: 'attack_specific_predictive_normal', time_unit: 'ms', error_definition: 'input_time_minus_impact_time',
     distributions: dist, metadata: meta,
-    source: { app_version: Core.VERSION, sessions: a.sessionIds, analyzed_at: a.analyzed_at, browser: env ? env.userAgent : null, platform: env ? env.platform : null },
+    source: { sessions: a.sessionIds, analyzed_at: a.analyzed_at, browser: env ? env.userAgent : null, platform: env ? env.platform : null },
     notes: ['人間の入力タイミング分布のみ。ネットワーク遅延・フレーム量子化・ゲーム内処理遅延は含まない。', 'ブラウザ・ディスプレイ・入力デバイスの遅延が推定値に含まれる。', '攻撃ごとに独立に推定（パラメータの共有・プールなし）。', '使用例：errorMs = mu_ms + sigma_ms * normalRandom(); humanInputTime = impactTime + errorMs;'],
   };
 }
-function curJOr(a) { const el = $('#st-J'); const v = el ? +el.value : NaN; return Number.isFinite(v) && v > 0 ? v : (a.sessions[0] ? a.sessions[0].settings.justWindow : 110); }
 
 /* -------------------------------------------------------- データ管理 --- */
 function renderDataPanel() {
   const ids = Store.index().slice().reverse();
-  const rows = ids.map((id) => {
-    const s = Store.loadSession(id); if (!s) return '';
+  const sessions = ids.map((id) => Store.loadSession(id)).filter(Boolean);
+  const rows = sessions.map((s) => {
+    const id = s.id;
     const done = s.trials.filter((t) => t.status === 'completed').length, planned = s.queue.length - s.queue.filter((q) => q.retry_of).length;
     return `<tr><td class="mono">${esc(id)}</td><td>${esc(MODE_LABEL[s.mode])}${s.attack ? '・' + AL[s.attack] : ''}</td><td>${esc(s.created_at.replace('T', ' ').slice(0, 19))}</td><td>${esc({ active: '途中', complete: '完了' }[s.status] || s.status)}</td><td>${done} / ${planned}</td><td>${s.trials.filter((t) => t.status === 'aborted').length}</td><td>${esc(s.device || '—')}</td>
       <td class="acts"><button class="btn sm" data-act="resume" data-id="${esc(id)}" ${s.status === 'complete' || s.imported_at ? 'disabled' : ''}>再開</button><button class="btn sm" data-act="view" data-id="${esc(id)}">閲覧</button><button class="btn sm" data-act="csv" data-id="${esc(id)}">CSV</button><button class="btn sm" data-act="json" data-id="${esc(id)}">JSON</button><button class="btn sm" data-act="params" data-id="${esc(id)}">パラメータJSON</button><button class="btn sm danger" data-act="delete" data-id="${esc(id)}">削除</button></td></tr>`;
   }).join('');
   $('#data-table').innerHTML = rows ? `<div class="scroll-x"><table class="tbl"><tr><th>セッション</th><th>モード</th><th>作成</th><th>状態</th><th>完了/計画</th><th>中断</th><th>デバイス</th><th></th></tr>${rows}</table></div>` : '<p class="muted">保存されたセッションはありません。</p>';
   // 攻撃ごとの測定履歴
-  const hist = AT.map((at) => { const ss = ids.map((id) => Store.loadSession(id)).filter((s) => s && s.trials.some((t) => t.attack_type === at)); const n = ss.reduce((k, s) => k + s.trials.filter((t) => t.attack_type === at && t.valid_for_fit).length, 0); return `<tr><td>${AL[at]}</td><td>${ss.length}</td><td>${n}</td></tr>`; }).join('');
+  const hist = AT.map((at) => { const ss = sessions.filter((s) => s.trials.some((t) => t.attack_type === at)); const n = ss.reduce((k, s) => k + s.trials.filter((t) => t.attack_type === at && t.valid_for_fit).length, 0); return `<tr><td>${AL[at]}</td><td>${ss.length}</td><td>${n}</td></tr>`; }).join('');
   $('#data-history').innerHTML = `<table class="tbl small"><tr><th>攻撃</th><th>セッション数</th><th>有効試行の合計</th></tr>${hist}</table>`;
   $('#storage-status').textContent = Store.available() ? '' : 'このブラウザではローカル保存が使えません（プライベートモード等）。';
 }
@@ -2307,21 +2422,18 @@ async function dataAction(act, id) {
 function importSessionJSON(j) {
   if (!(j && j.session && Array.isArray(j.trials))) throw new Error('このアプリのセッション JSON ではありません。');
   let id = j.session.id; if (Store.loadSession(id)) id = id + '-import-' + Date.now().toString(36);
-  const s = { format: 'jdpred-session/1', app_version: j.app_version, id, seed: j.session.seed, mode: j.session.mode, attack: j.session.attack, created_at: j.session.created_at, settings: mergeSettings(DEFAULT_SETTINGS, j.session.settings),
+  const s = { format: 'jdpred-session/1', id, seed: j.session.seed, mode: j.session.mode, attack: j.session.attack, created_at: j.session.created_at, settings: mergeSettings(DEFAULT_SETTINGS, j.session.settings),
     queue: j.session.planned_queue || [], cursor: (j.session.planned_queue || []).length, trials: j.trials, inProgress: null, device: j.session.input_device, status: 'complete', env: j.environment, loads: j.session.loads || [], imported_at: new Date().toISOString() };
   return s;
 }
 
-/* ------------------------------------------------------------ 検証画面 --- */
+/* ------------------------------------------------- 自己診断（E2E・コンソール用） --- */
 async function runAllTests() {
-  const out = document.createElement('div'); await yieldUI();
-  const t0 = performance.now();
   const res = Core.runCoreTests();
   const T = async (name, fn) => { try { const r = await fn(); res.push({ name, pass: !!(r === true || (r && r.pass)), detail: r && r.detail ? r.detail : '' }); } catch (e) { res.push({ name, pass: false, detail: e.message }); } };
-  // 10. 保存した JSON を再読み込みして同じ解析結果を再現
   await T('10. 保存した JSON を再読み込みして同じ解析結果を再現', async () => {
     const st = mergeSettings(DEFAULT_SETTINGS, null), rng = Core.makeRng('roundtrip');
-    const sess = createSession(st, 'mixed', 'slam'); sess.queue = sess.queue.slice(0, 60);
+    const sess = createSession(st, 'mixed', 'slam'); sess.queue = sess.queue.slice(0, 84);
     let tt = 1000;
     for (const item of sess.queue) {
       const tr = Core.createTrialRunner({ item, settings: st, toRel: (t) => t }); tr.start(tt); let k = 0; const target = -90 + 40 * rng.normal();
@@ -2337,16 +2449,14 @@ async function runAllTests() {
     const s3 = Store.loadSession(s2.id); Store.deleteSession(s2.id);
     const a2 = await runAnalysis([s3], { bootstrapN: 0, J: 176 }, () => {});
     const diffs = a1.groups.map((g) => { const h = a2.groups.find((x) => x.key === g.key); return h && g.fit.mle.ok ? Math.max(Math.abs(g.fit.mle.mu - h.fit.mle.mu), Math.abs(g.fit.mle.sigma - h.fit.mle.sigma)) : (g.fit.mle.ok ? Infinity : 0); });
-    return { pass: a1.groups.length === 5 && a2.groups.length === 5 && Math.max(...diffs) === 0, detail: `5 攻撃 × 各 ${a1.groups[0].counts.valid} 試行、最大差 ${Math.max(...diffs)}` };
+    return { pass: a1.groups.length === AT.length && a2.groups.length === AT.length && Math.max(...diffs) === 0, detail: `${AT.length} 攻撃 × 各 ${a1.groups[0].counts.valid} 試行、最大差 ${Math.max(...diffs)}` };
   });
   await T('ローカル保存：書き込み → 読み込み', () => { const id = '__selftest__'; const s = { id, trials: [{ a: 1.25, b: null }], queue: [], status: 'complete', created_at: new Date().toISOString() }; if (!Store.saveSession(s)) return false; const r = Store.loadSession(id); Store.deleteSession(id); return r && r.trials[0].a === 1.25 && r.trials[0].b === null; });
   await T('入力イベント時刻が performance.now() と同じ時計', () => { const ev = new Event('x'), now = performance.now(), n = normalizeEventTs(ev.timeStamp, now); return { pass: n !== null && Math.abs(n - now) < 50, detail: `event ${fmt(ev.timeStamp, 3)} / now ${fmt(now, 3)}` }; });
   await T('performance.now() の分解能（目安）', () => { let d = Infinity, prev = performance.now(); for (let i = 0; i < 20000; i++) { const t = performance.now(); if (t > prev) { d = Math.min(d, t - prev); prev = t; } } return { pass: d <= 1, detail: `最小刻み ≈ ${d.toFixed(4)} ms` }; });
-  const fail = res.filter((r) => !r.pass).length;
-  out.innerHTML = `<p><b>${res.length - fail} / ${res.length}</b> 件成功（${((performance.now() - t0) / 1000).toFixed(1)} 秒）</p><table class="tbl small"><tr><th></th><th>検査</th><th>詳細</th></tr>${res.map((r) => `<tr><td>${r.pass ? '<span class="tag ok">PASS</span>' : '<span class="tag bad">FAIL</span>'}</td><td>${esc(r.name)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
   window.__testResults = res;
+  return res;
 }
-
 
 /* ------------------------------------------------------------ 起動 --- */
 function bindUI() {
@@ -2357,18 +2467,15 @@ function bindUI() {
     const act = b.dataset.act;
     if (act === 'continue') continueSession();
     else if (act === 'goto-stats') switchTab('stats');
-    else if (act === 'settings-reset') askConfirm('設定を既定値に戻しますか？', '戻す').then((ok) => { if (ok) { App.settings = clone(DEFAULT_SETTINGS); Store.saveSettings(App.settings); renderSettings(); } });
+    else if (act === 'settings-reset') askConfirm('設定を既定値に戻しますか？', '戻す').then((ok) => { if (ok) { App.settings = clone(DEFAULT_SETTINGS); Store.saveSettings(App.settings); renderSettings(); syncModeUI(); } });
     else if (b.dataset.id) dataAction(act, b.dataset.id);
   });
   $('#btn-start').onclick = startNewSession;
   $('#btn-continue').onclick = continueSession;
   $('#btn-pause').onclick = () => pauseSession('user_pause');
   $('#btn-end').onclick = endSession;
-  $('#btn-max').onclick = () => { document.body.classList.toggle('maximized'); setTimeout(() => App.scene && App.scene.resize(), 50); };
-  $('#btn-fs').onclick = () => { const el = $('#stage'); if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch((err) => toast('フルスクリーンにできません: ' + err.message, true)); };
-  document.addEventListener('fullscreenchange', () => setTimeout(() => App.scene && App.scene.resize(), 50));
-  $('#m-mode').onchange = () => { $('#m-attack-row').hidden = $('#m-attack-row-label').hidden = $('#m-mode').value !== 'individual'; App.settings.mode = $('#m-mode').value; Store.saveSettings(App.settings); };
-  $('#m-attack').onchange = () => { App.previewAttack = $('#m-attack').value; App.settings.attack = App.previewAttack; Store.saveSettings(App.settings); };
+  $('#m-mode').onchange = () => { App.settings.mode = $('#m-mode').value; Store.saveSettings(App.settings); syncModeUI(); };
+  $('#m-attack').onchange = () => { App.settings.attack = $('#m-attack').value; Store.saveSettings(App.settings); syncModeUI(); };
   $('#st-run').onclick = runAnalysisUI;
   $('#st-J').oninput = () => { if (App.analysis) renderStats(); };
   $$('#st-Jpresets [data-j]').forEach((b) => (b.onclick = () => { $('#st-J').value = b.dataset.j; if (App.analysis) renderStats(); }));
@@ -2393,20 +2500,28 @@ function bindUI() {
   window.addEventListener('resize', () => App.scene && App.scene.resize());
   if ('ResizeObserver' in window) new ResizeObserver(() => App.scene && App.scene.resize()).observe($('#stage-gl'));
 }
+// 測定モード・攻撃の選択欄を、ブラウザに保存された設定と常に一致させる
+function syncModeUI() {
+  const s = App.settings;
+  if (!MODE_LABEL[s.mode]) s.mode = DEFAULT_SETTINGS.mode;
+  if (!AT.includes(s.attack)) s.attack = DEFAULT_SETTINGS.attack;
+  $('#m-mode').value = s.mode; $('#m-attack').value = s.attack;
+  $('#m-attack-row').hidden = $('#m-attack-row-label').hidden = s.mode !== 'individual';
+  App.previewAttack = s.attack;
+}
 async function boot() {
   App.settings = mergeSettings(DEFAULT_SETTINGS, Store.settings());
-  $('#m-attack').innerHTML = AT.map((a) => `<option value="${a}" ${a === App.settings.attack ? 'selected' : ''}>${AL[a]}</option>`).join('');
-  $('#m-mode').value = App.settings.mode; $('#m-attack-row').hidden = $('#m-attack-row-label').hidden = App.settings.mode !== 'individual';
-  App.previewAttack = App.settings.attack;
+  $('#m-attack').innerHTML = AT.map((a) => `<option value="${a}">${AL[a]}</option>`).join('');
+  syncModeUI();
   bindUI();
   if (!Store.available()) toast('ローカル保存が利用できません。測定データは再読み込みで失われます。', true);
-    updateHud(true); refreshButtons();
+  updateHud(true); refreshButtons();
   requestAnimationFrame(frameLoop);
   sceneKey = JSON.stringify([App.settings.quality, App.settings.effects]);
   await initScene();
   const act = Store.active(), s = act && Store.loadSession(act);
   if (s && s.status === 'active') resumeSession(s.id);
-  else setOverlay(`<div class="ov-title">${APP_NAME}</div><div class="ov-text">突進・叩きつけ・衝撃波・AoE起爆・赤発光→咆哮の 5 種類の攻撃に対して、ジャスト回避の入力タイミング誤差を測ります。攻撃ごとに正規分布 N(μ, σ²) を独立に推定します。<br>右で測定モードと攻撃を選んで「測定を開始」を押してください。</div>`);
+  else setOverlay(`<div class="ov-title">${APP_NAME}</div><div class="ov-text">${AT.map((a) => AL[a]).join('・')}の ${AT.length} 種類の攻撃に対して、ジャスト回避の入力タイミング誤差を測ります。攻撃ごとに正規分布 N(μ, σ²) を独立に推定します。</div>`);
   window.__app = App; window.runAllTests = runAllTests;
 }
 boot();
